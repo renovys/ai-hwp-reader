@@ -46,3 +46,12 @@ jobs:
         run: |
           ai-hwp-reader --version
           ai-hwp-reader --help
+      - name: 생성물 보관
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-v04
+          path: |
+            SKILL.md
+            skill/hwp_reader_single.py
+          if-no-files-found: error

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-hwp-reader"
-version = "0.3.1"
-description = "ChatGPT·Claude·Gemini가 HWP·HWPX의 본문·병합 표·숨은 메모를 읽고 일하게 하는 AI용 한글 문서 리더."
+version = "0.4.0"
+description = "ChatGPT·Claude·Gemini가 HWP·HWPX의 본문·병합 표·중첩 표·숨은 메모·변경추적을 구조대로 읽고 일하게 하는 AI용 한글 문서 리더."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

@@ -1,4 +1,4 @@
-# AI HWP Reader v0.5.0 | source-sha256:2b944005ad0d168b | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader
+# AI HWP Reader v0.5.2 | source-sha256:e894b206bd5f6ff9 | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader
 
 """표준 라이브러리만으로 읽는 OLE Compound File Binary 컨테이너.
 

@@ -34,10 +34,14 @@ def _utf8_console():
 
 
 def version():
-    m = re.search(r'^version\s*=\s*"([^"]+)"', (ROOT / "pyproject.toml").read_text(encoding="utf-8"), re.M)
-    if not m:
-        sys.exit("[실패] pyproject.toml에서 version을 못 찾았다")
-    return m.group(1)
+    """정본은 hwp_reader/__init__.py다. pyproject와 어긋나면 멈춘다."""
+    pkg = re.search(r'__version__\s*=\s*"([^"]+)"', (ROOT / "hwp_reader" / "__init__.py").read_text(encoding="utf-8"))
+    proj = re.search(r'^version\s*=\s*"([^"]+)"', (ROOT / "pyproject.toml").read_text(encoding="utf-8"), re.M)
+    if not pkg or not proj:
+        sys.exit("[실패] 버전을 못 찾았다")
+    if pkg.group(1) != proj.group(1):
+        sys.exit(f"[실패] 버전이 어긋난다: __init__={pkg.group(1)} pyproject={proj.group(1)}")
+    return pkg.group(1)
 
 
 def main():

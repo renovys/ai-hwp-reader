@@ -5,9 +5,9 @@
 **ChatGPT · Claude · Gemini에게 아래아한글(HWP/HWPX)을 그대로 주세요.**  
 본문만 훑는 것이 아니라 **병합된 표, 표 안의 표, 숨은 메모, 변경 내용 추적**까지 꺼내서 AI가 요약하고, 검토하고, 비교하고, 계산하고, 답하게 합니다.
 
-[![PyPI](https://img.shields.io/pypi/v/hwp-reader)](https://pypi.org/project/hwp-reader/)
-[![Python](https://img.shields.io/pypi/pyversions/hwp-reader)](https://pypi.org/project/hwp-reader/)
-[![tests](https://github.com/renovys/hwp-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/renovys/hwp-reader/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/ai-hwp-reader)](https://pypi.org/project/ai-hwp-reader/)
+[![Python](https://img.shields.io/pypi/pyversions/ai-hwp-reader)](https://pypi.org/project/ai-hwp-reader/)
+[![tests](https://github.com/renovys/ai-hwp-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/renovys/ai-hwp-reader/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **아래아한글 · 아래한글 · 한글 · 한컴 · 한글과컴퓨터 · HWP · HWPX → AI**
@@ -211,12 +211,12 @@ AI에게는 파일 경계를 유지해서 전달합니다.
 
 ## 개발자라면
 
-제품 이름은 **AI HWP Reader**지만 PyPI 패키지와 Python import는 기존 호환성을 위해 `hwp-reader` / `hwp_reader`를 유지합니다.
+PyPI 패키지와 CLI는 `ai-hwp-reader`입니다. Python import는 `hwp_reader` 그대로이고, 예전 `hwp-reader` 명령도 함께 깔려 계속 동작합니다.
 
 ### 설치
 
 ```bash
-pip install hwp-reader
+pip install ai-hwp-reader
 ```
 
 기본 런타임 의존성은 **0개**입니다.
@@ -266,19 +266,19 @@ print(render_documents(documents, "md"))
 ### CLI
 
 ```bash
-hwp-reader 문서.hwp --format md
-hwp-reader 문서.hwpx --format json
-hwp-reader 문서묶음.zip --format md
-hwp-reader 문서.hwp --tables-only
-hwp-reader 문서.hwp --memos-only
-hwp-reader 문서.hwp --revisions-only
-hwp-reader ./폴더 -r
+ai-hwp-reader 문서.hwp --format md
+ai-hwp-reader 문서.hwpx --format json
+ai-hwp-reader 문서묶음.zip --format md
+ai-hwp-reader 문서.hwp --tables-only
+ai-hwp-reader 문서.hwp --memos-only
+ai-hwp-reader 문서.hwp --revisions-only
+ai-hwp-reader ./폴더 -r
 ```
 
 ### MCP
 
 ```bash
-pip install "hwp-reader[mcp]"
+pip install "ai-hwp-reader[mcp]"
 ```
 
 Claude Desktop·Cursor 등의 MCP 클라이언트에서 로컬 문서를 읽을 때 사용할 수 있습니다. MCP 도구도 읽기 전용입니다.
@@ -347,10 +347,10 @@ tests/                      생성 fixture 기반 회귀시험
 ## 이름에 대하여
 
 **프로젝트/제품:** AI HWP Reader  
-**PyPI:** `hwp-reader`  
+**PyPI:** `ai-hwp-reader`  
 **Python:** `hwp_reader`
 
-`hwp-reader`가 “파일을 읽는 라이브러리”였다면, **AI HWP Reader는 “당신의 AI가 HWP를 읽고 일을 하게 만드는 도구”**입니다.
+예전 `hwp-reader`가 “파일을 읽는 라이브러리”였다면, **AI HWP Reader는 “당신의 AI가 HWP를 읽고 일을 하게 만드는 도구”**입니다.
 
 ---
 

@@ -3,8 +3,8 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hwp-reader"
-version = "0.3.0"
+name = "ai-hwp-reader"
+version = "0.3.1"
 description = "ChatGPT·Claude·Gemini가 HWP·HWPX의 본문·병합 표·숨은 메모를 읽고 일하게 하는 AI용 한글 문서 리더."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -42,14 +42,17 @@ mcp = ["mcp>=1.0.0"]
 dev = ["pytest>=7"]
 
 [project.scripts]
+ai-hwp-reader = "hwp_reader.cli:main"
+ai-hwp-reader-mcp = "hwp_reader.mcp_server:main"
+# 0.3.0 이전 이름. 기존 사용자를 위해 남긴다.
 hwp-reader = "hwp_reader.cli:main"
 hwp-reader-mcp = "hwp_reader.mcp_server:main"
 
 [project.urls]
-Homepage = "https://github.com/renovys/hwp-reader"
-Issues = "https://github.com/renovys/hwp-reader/issues"
-Documentation = "https://github.com/renovys/hwp-reader/blob/main/docs/hwp-format.md"
-Changelog = "https://github.com/renovys/hwp-reader/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/renovys/ai-hwp-reader"
+Issues = "https://github.com/renovys/ai-hwp-reader/issues"
+Documentation = "https://github.com/renovys/ai-hwp-reader/blob/main/docs/hwp-format.md"
+Changelog = "https://github.com/renovys/ai-hwp-reader/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["hwp_reader*"]

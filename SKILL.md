@@ -26,7 +26,7 @@
 ## 파서 코드
 
 ```python
-# AI HWP Reader | 출처: hwp_reader/_ole.py + hwp_reader/parser.py | 라이선스: MIT | 저장소: https://github.com/renovys/hwp-reader
+# AI HWP Reader | 출처: hwp_reader/_ole.py + hwp_reader/parser.py | 라이선스: MIT | 저장소: https://github.com/renovys/ai-hwp-reader
 
 """표준 라이브러리만으로 읽는 OLE Compound File Binary 컨테이너."""
 
@@ -943,5 +943,5 @@ if __name__ == "__main__":
 - 문서 쓰기·수정
 
 프로젝트: **AI HWP Reader**  
-PyPI/CLI: `hwp-reader`  
-저장소: https://github.com/renovys/hwp-reader
+PyPI/CLI: `ai-hwp-reader`  
+저장소: https://github.com/renovys/ai-hwp-reader

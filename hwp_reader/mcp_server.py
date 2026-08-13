@@ -1,10 +1,10 @@
-"""hwp-reader MCP 서버.
+"""ai-hwp-reader MCP 서버.
 
 MCP를 말하는 도구라면 무엇에든 붙습니다. Claude Code·Claude Desktop, Codex CLI,
 Gemini CLI, Cursor, VS Code, Windsurf, Zed 모두 같은 한 줄로 등록합니다.
 
-    hwp-reader-mcp                 stdio (기본. 로컬 CLI·데스크톱 앱용)
-    hwp-reader-mcp --transport http --port 8000
+    ai-hwp-reader-mcp                 stdio (기본. 로컬 CLI·데스크톱 앱용)
+    ai-hwp-reader-mcp --transport http --port 8000
                                    streamable HTTP (원격 커넥터를 받는 웹 클라이언트용)
 
 도구는 세 개뿐입니다. 읽기 전용이라 문서를 건드리지 않고, 네트워크로 문서를
@@ -32,9 +32,9 @@ except ImportError:                                    # pragma: no cover
     try:                                               # SDK 1.x
         from mcp.server.fastmcp import FastMCP as _Server
     except ImportError:
-        sys.exit("MCP SDK가 없습니다.  pip install 'hwp-reader[mcp]'")
+        sys.exit("MCP SDK가 없습니다.  pip install 'ai-hwp-reader[mcp]'")
 
-mcp = _Server("hwp-reader")
+mcp = _Server("ai-hwp-reader")
 
 _LIMIT = 400_000        # 한 번에 돌려줄 최대 글자 수
 
@@ -128,7 +128,7 @@ def _serve(transport, host, port):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        prog="hwp-reader-mcp",
+        prog="ai-hwp-reader-mcp",
         description="한글 문서(HWP/HWPX) 읽기 도구를 MCP로 노출한다",
     )
     ap.add_argument("--transport", default="stdio", choices=["stdio", "http"],
@@ -138,7 +138,7 @@ def main(argv=None):
     ap.add_argument("--port", type=int, default=8000,
                     help="--transport http일 때 포트 (기본 8000)")
     ap.add_argument("--version", action="version",
-                    version=f"hwp-reader-mcp {__version__}")
+                    version=f"ai-hwp-reader-mcp {__version__}")
     args = ap.parse_args(argv)
     _serve(args.transport, args.host, args.port)
 

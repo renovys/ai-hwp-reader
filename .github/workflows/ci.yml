@@ -40,5 +40,5 @@ jobs:
         run: python -m pytest tests -q
       - name: 명령이 실제로 실행되는지
         run: |
-          hwp-reader --version
-          hwp-reader --help
+          ai-hwp-reader --version
+          ai-hwp-reader --help

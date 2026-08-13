@@ -7,7 +7,7 @@ OLE_SOURCE = ROOT / "hwp_reader" / "_ole.py"
 PARSER_SOURCE = ROOT / "hwp_reader" / "parser.py"
 SINGLE_SOURCE = ROOT / "skill" / "hwp_reader_single.py"
 SKILL_SOURCE = ROOT / "SKILL.md"
-HEADER = "# AI HWP Reader | 출처: hwp_reader/_ole.py + hwp_reader/parser.py | 라이선스: MIT | 저장소: https://github.com/renovys/hwp-reader"
+HEADER = "# AI HWP Reader | 출처: hwp_reader/_ole.py + hwp_reader/parser.py | 라이선스: MIT | 저장소: https://github.com/renovys/ai-hwp-reader"
 SKILL_PREFIX = """# AI HWP Reader — 이 파일 하나를 AI에게 주면 HWP를 읽고 일을 합니다
 
 이 파일은 사람이 읽는 설명서가 아니라 **AI 실행 스킬**이다.
@@ -56,8 +56,8 @@ SKILL_SUFFIX = """
 - 문서 쓰기·수정
 
 프로젝트: **AI HWP Reader**  
-PyPI/CLI: `hwp-reader`  
-저장소: https://github.com/renovys/hwp-reader
+PyPI/CLI: `ai-hwp-reader`  
+저장소: https://github.com/renovys/ai-hwp-reader
 """
 
 

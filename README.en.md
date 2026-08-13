@@ -6,9 +6,9 @@ Give **ChatGPT, Claude or Gemini** the original Korean HWP/HWPX file. AI HWP Rea
 
 No Hancom Office · zero runtime dependencies for the core parser · read-only
 
-[![PyPI](https://img.shields.io/pypi/v/hwp-reader)](https://pypi.org/project/hwp-reader/)
-[![Python](https://img.shields.io/pypi/pyversions/hwp-reader)](https://pypi.org/project/hwp-reader/)
-[![tests](https://github.com/renovys/hwp-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/renovys/hwp-reader/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/ai-hwp-reader)](https://pypi.org/project/ai-hwp-reader/)
+[![Python](https://img.shields.io/pypi/pyversions/ai-hwp-reader)](https://pypi.org/project/ai-hwp-reader/)
+[![tests](https://github.com/renovys/ai-hwp-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/renovys/ai-hwp-reader/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [한국어](README.md)
@@ -98,10 +98,10 @@ A ZIP can contain HWP/HWPX files in nested folders. `read_documents()` finds the
 
 ## For developers
 
-The product/brand is **AI HWP Reader**. For compatibility, the PyPI package, import name, and CLI remain `hwp-reader`, `hwp_reader`, and `hwp-reader`.
+The PyPI package and CLI are `ai-hwp-reader`. The Python import stays `hwp_reader`, and the legacy `hwp-reader` command is still installed for compatibility.
 
 ```bash
-pip install hwp-reader
+pip install ai-hwp-reader
 ```
 
 Core runtime dependencies: **0**.
@@ -129,19 +129,19 @@ Block types include `text`, `table`, `memo`, and `revision`. Tables expose their
 ### CLI
 
 ```bash
-hwp-reader document.hwp --format md
-hwp-reader document.hwpx --format json
-hwp-reader bundle.zip --format md
-hwp-reader document.hwp --tables-only
-hwp-reader document.hwp --memos-only
-hwp-reader document.hwp --revisions-only
-hwp-reader ./folder -r
+ai-hwp-reader document.hwp --format md
+ai-hwp-reader document.hwpx --format json
+ai-hwp-reader bundle.zip --format md
+ai-hwp-reader document.hwp --tables-only
+ai-hwp-reader document.hwp --memos-only
+ai-hwp-reader document.hwp --revisions-only
+ai-hwp-reader ./folder -r
 ```
 
 ### MCP
 
 ```bash
-pip install "hwp-reader[mcp]"
+pip install "ai-hwp-reader[mcp]"
 ```
 
 The MCP tools are read-only as well.

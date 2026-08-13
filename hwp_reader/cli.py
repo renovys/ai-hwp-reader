@@ -75,7 +75,7 @@ def _per_file_dest(folder, name, ext, state):
 def main(argv=None):
     _utf8_console()
     ap = argparse.ArgumentParser(
-        prog="hwp-reader",
+        prog="ai-hwp-reader",
         description="AI가 HWP/HWPX/ZIP의 본문·표·메모·변경추적을 읽게 한다",
     )
     ap.add_argument("target", nargs="+", help="HWP/HWPX/ZIP 파일 또는 폴더")
@@ -89,7 +89,7 @@ def main(argv=None):
         "-o", "--out", metavar="경로",
         help="결과를 파일 또는 폴더에 저장한다. 폴더면 문서마다 한 파일을 만든다",
     )
-    ap.add_argument("--version", action="version", version=f"hwp-reader {__version__}")
+    ap.add_argument("--version", action="version", version=f"ai-hwp-reader {__version__}")
     args = ap.parse_args(argv)
 
     if sum(bool(x) for x in (args.tables_only, args.memos_only, args.revisions_only)) > 1:

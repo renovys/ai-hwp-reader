@@ -1,4 +1,4 @@
-# AI HWP Reader | 출처: hwp_reader/_ole.py + hwp_reader/parser.py | 라이선스: MIT | 저장소: https://github.com/renovys/hwp-reader
+# AI HWP Reader | 출처: hwp_reader/_ole.py + hwp_reader/parser.py | 라이선스: MIT | 저장소: https://github.com/renovys/ai-hwp-reader
 
 """표준 라이브러리만으로 읽는 OLE Compound File Binary 컨테이너."""
 

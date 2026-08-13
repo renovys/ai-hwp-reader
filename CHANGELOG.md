@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- 프로젝트 이름을 **ai-hwp-reader**로 통일했습니다. 저장소는 `github.com/renovys/ai-hwp-reader`, PyPI 패키지와 CLI는 `ai-hwp-reader`입니다.
+- Python import 이름은 `hwp_reader` 그대로이고, 예전 `hwp-reader` / `hwp-reader-mcp` 명령도 함께 설치돼 계속 동작합니다.
+
 ## 0.3.0
 
 - 프로젝트 메시징을 **AI HWP Reader**로 재정의했습니다. 목표를 단순 HWP 파싱이 아니라 “AI가 HWP/HWPX를 직접 읽고 그 내용을 근거로 일하게 하는 것”으로 명확히 했습니다.

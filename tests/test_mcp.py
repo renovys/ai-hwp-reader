@@ -1,6 +1,6 @@
 """MCP 서버 시험.
 
-MCP 파이썬 SDK가 깔려 있을 때만 돈다(`pip install 'hwp-reader[mcp]'`).
+MCP 파이썬 SDK가 깔려 있을 때만 돈다(`pip install 'ai-hwp-reader[mcp]'`).
 SDK 1.x의 FastMCP와 2.x의 MCPServer 양쪽에서 같은 결과가 나와야 한다.
 """
 

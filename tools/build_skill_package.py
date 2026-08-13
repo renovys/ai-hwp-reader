@@ -25,6 +25,14 @@ OUT = ROOT / "dist" / "ai-hwp-reader-skill.zip"
 NAME = "ai-hwp-reader"
 
 
+def _utf8_console():
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def version():
     m = re.search(r'^version\s*=\s*"([^"]+)"', (ROOT / "pyproject.toml").read_text(encoding="utf-8"), re.M)
     if not m:
@@ -33,6 +41,7 @@ def version():
 
 
 def main():
+    _utf8_console()
     dry = "--dry" in sys.argv[1:]
     for a in sys.argv[1:]:
         if a in ("-h", "--help"):

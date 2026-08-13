@@ -119,6 +119,9 @@ def build_source():
     digest = source_fingerprint()
     header = f"# AI HWP Reader v{_version()} | source-sha256:{digest} | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader"
     main = ('if __name__ == "__main__":\n'
+            "    for _stream in (sys.stdout, sys.stderr):\n"
+            '        try: _stream.reconfigure(encoding="utf-8", errors="replace")\n'
+            "        except (AttributeError, ValueError, OSError): pass\n"
             "    if len(sys.argv) < 2:\n"
             '        print("사용법: python hwp_reader_single.py 문서.hwp|문서.hwpx|묶음.zip [...]", file=sys.stderr)\n'
             "        sys.exit(2)\n"

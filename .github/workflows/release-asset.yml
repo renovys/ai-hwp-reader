@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ github.event.release.tag_name || github.ref_name }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -32,6 +32,18 @@ jobs:
           git diff --exit-code -- SKILL.md skill/hwp_reader_single.py
       - name: 스킬 패키지 빌드
         run: python tools/build_skill_package.py
+      - name: 만든 버전이 태그와 같은지 확인
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          python - <<'PY'
+          import os, re, zipfile
+          tag = os.environ["TAG"].lstrip("v")
+          with zipfile.ZipFile("dist/ai-hwp-reader-skill.zip") as z:
+              doc = z.read("ai-hwp-reader/SKILL.md").decode("utf-8")
+          assert re.search(rf"v{re.escape(tag)}\b", doc), f"{tag} 자산이 아니다"
+          print(f"자산 버전 확인: v{tag}")
+          PY
       - name: 릴리스에 SKILL.md·스킬 패키지 첨부
         env:
           GH_TOKEN: ${{ github.token }}

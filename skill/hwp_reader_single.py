@@ -1,4 +1,4 @@
-# AI HWP Reader v0.5.0 | source-sha256:db98b00fe5def4b9 | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader
+# AI HWP Reader v0.5.0 | source-sha256:2b944005ad0d168b | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader
 
 """표준 라이브러리만으로 읽는 OLE Compound File Binary 컨테이너.
 
@@ -2577,6 +2577,9 @@ sys.modules[__name__].read_hwpx = _single_post_read_hwpx
 sys.modules[__name__].render = _single_post_render
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):
+        try: _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError): pass
     if len(sys.argv) < 2:
         print("사용법: python hwp_reader_single.py 문서.hwp|문서.hwpx|묶음.zip [...]", file=sys.stderr)
         sys.exit(2)

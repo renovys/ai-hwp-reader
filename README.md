@@ -31,7 +31,7 @@ AI HWP Reader는 한글 문서의 본문뿐 아니라 **병합 표, 여러 단�
 
 ### 2. 한 번 등록해 두기
 
-**Claude(웹·앱)** — [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)을 받아 설정 → 스킬(Skills) →
+**Claude** — [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)을 받아 설정 → 스킬(Skills) →
 새 스킬 만들기에서 zip 그대로 올립니다. 계정에 남으므로 이후 모든 대화에서 자동으로 발동합니다.
 Claude Code처럼 파일을 저장할 수 있는 환경이라면 채팅창에 zip을 주고 "스킬로 등록해줘"라고 해도 됩니다.
 

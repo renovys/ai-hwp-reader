@@ -38,10 +38,38 @@ def _collect(targets, recursive):
 
 
 def _write(state, path, text):
+    """여러 문서를 하나의 출력 파일에 이어 쓴다."""
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "a" if state.get("append") else "w", encoding="utf-8") as fp:
         fp.write(text)
     state["append"] = True
+
+
+def _output_ext(fmt):
+    return {"json": ".json", "md": ".md"}.get(fmt, ".txt")
+
+
+def _safe_output_name(name, ext):
+    """ZIP 내부 경로를 출력 폴더 밖으로 탈출하지 않는 평평한 파일명으로 만든다."""
+    parts = [part for part in name.replace("\\", "/").split("/")
+             if part not in ("", ".", "..")]
+    flat = "__".join(parts) or "document"
+    return os.path.splitext(flat)[0] + ext
+
+
+def _per_file_dest(folder, name, ext, state):
+    """같은 이름의 ZIP 멤버가 있어도 기존 결과를 덮어쓰지 않는다."""
+    os.makedirs(folder, exist_ok=True)
+    filename = _safe_output_name(name, ext)
+    stem, suffix = os.path.splitext(filename)
+    used = state.setdefault("used_destinations", set())
+    candidate = os.path.join(folder, filename)
+    index = 2
+    while candidate in used or os.path.exists(candidate):
+        candidate = os.path.join(folder, f"{stem}-{index}{suffix}")
+        index += 1
+    used.add(candidate)
+    return candidate
 
 
 def main(argv=None):
@@ -57,7 +85,10 @@ def main(argv=None):
     ap.add_argument("--memos-only", action="store_true", help="메모만 출력")
     ap.add_argument("--revisions-only", action="store_true", help="변경추적만 출력")
     ap.add_argument("-r", "--recursive", action="store_true", help="폴더를 하위까지 훑는다")
-    ap.add_argument("-o", "--out", metavar="경로", help="결과를 파일에 저장한다")
+    ap.add_argument(
+        "-o", "--out", metavar="경로",
+        help="결과를 파일 또는 폴더에 저장한다. 폴더면 문서마다 한 파일을 만든다",
+    )
     ap.add_argument("--version", action="version", version=f"hwp-reader {__version__}")
     args = ap.parse_args(argv)
 
@@ -73,7 +104,14 @@ def main(argv=None):
         print("HWP/HWPX/ZIP 문서가 없다", file=sys.stderr)
         return 1
 
+    per_file = bool(args.out) and (
+        os.path.isdir(args.out) or args.out.endswith(os.sep)
+    )
+    if per_file:
+        os.makedirs(args.out, exist_ok=True)
+    ext = _output_ext(args.format)
     state, failed, succeeded = {}, [], 0
+
     for path in targets:
         try:
             documents = read_documents(path)
@@ -92,14 +130,21 @@ def main(argv=None):
                 blocks = [b for b in blocks if b["type"] == "revision"]
 
             if args.format == "json":
-                body = json.dumps({"file": name, "blocks": blocks}, ensure_ascii=False) + "\n"
+                body = json.dumps(
+                    {"file": name, "blocks": blocks}, ensure_ascii=False
+                ) + "\n"
             else:
                 body = (f"\n{'=' * 70}\n{name}\n{'=' * 70}\n"
                         + render(blocks, args.format, args.tables_only) + "\n")
-            if args.out:
-                _write(state, args.out, body)
-            else:
+
+            if not args.out:
                 sys.stdout.write(body)
+            elif per_file:
+                dest = _per_file_dest(args.out, name, ext, state)
+                with open(dest, "w", encoding="utf-8") as fp:
+                    fp.write(body)
+            else:
+                _write(state, args.out, body)
             succeeded += 1
 
     if args.out:

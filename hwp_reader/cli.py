@@ -15,6 +15,20 @@ from .parser import read, render
 EXTS = (".hwp", ".hwpx")
 
 
+def _utf8_console():
+    """윈도우 콘솔 기본 인코딩(cp949·cp1252)에서 한글 출력이 죽는 것을 막는다.
+
+    고치지 않으면 `hwp-reader --help`조차 UnicodeEncodeError로 끝난다. 한글 문서를
+    다루는 도구가 한글을 못 찍으면 안 되므로, 인코딩을 못 바꾸는 환경에서는 적어도
+    대체 문자로 이어 가게 한다.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):    # 파이프·리다이렉트·구버전
+            pass
+
+
 def _collect(targets, recursive):
     """파일·폴더 목록을 실제 문서 경로로 편다."""
     out = []
@@ -43,6 +57,7 @@ def _write(out, path, text):
 
 
 def main(argv=None):
+    _utf8_console()
     ap = argparse.ArgumentParser(
         prog="hwp-reader",
         description="한글 문서(HWP/HWPX)를 표 구조까지 살려 읽는다",

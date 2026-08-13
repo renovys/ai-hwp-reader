@@ -24,7 +24,7 @@ AI HWP Reader는 한글 문서의 본문뿐 아니라 **병합 표, 여러 단�
 
 ### 1. [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md)를 받습니다
 
-클릭하면 바로 내려받습니다.
+클릭하면 바로 내려받습니다. AI에 **스킬로 한 번만 등록**해 계속 쓰려면 [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)을 받아 올리세요 (등록해 두면 다음 대화에서도 알아서 발동합니다).
 
 ### 2. `SKILL.md`와 HWP/HWPX를 AI 채팅창에 같이 올립니다
 

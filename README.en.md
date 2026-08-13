@@ -19,7 +19,7 @@ No Hancom Office · zero runtime dependencies for the core parser · read-only
 
 You do **not** need a terminal, Python knowledge, or `pip install`.
 
-1. **[Download `SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md)** — one click, saves straight to your machine
+1. **[Download `SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md)** — one click, saves straight to your machine. To install it once and keep it, grab [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip) and upload it as a skill instead.
 2. Attach `SKILL.md` together with your `.hwp`, `.hwpx`, or `.zip` file to the AI chat.
 3. Say **“do it”** — or ask for the actual work you want done.
 

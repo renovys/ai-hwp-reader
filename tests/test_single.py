@@ -26,12 +26,13 @@ def test_단일_파일을_실행하면_표_내용이_출력된다(tmp_path):
     assert "| 정가 |" in output and "1,944,000" in output
 
 
-def test_단일_파일이_여러_첨부문서를_한번에_읽는다(tmp_path):
+def test_단일_파일이_여러_첨부문서를_파일경계를_유지해_읽는다(tmp_path):
     first = write_hwpx(tmp_path / "첫째.hwpx", memo=False)
     second = write_hwpx(tmp_path / "둘째.hwpx", memo=False)
     result = _run(first, second)
     output = result.stdout.decode("utf-8", "replace")
     assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
-    assert "===== 첫째.hwpx =====" in output
-    assert "===== 둘째.hwpx =====" in output
+    assert "첫째.hwpx" in output
+    assert "둘째.hwpx" in output
+    assert output.count("=" * 70) >= 4
     assert output.count("1,944,000") == 2

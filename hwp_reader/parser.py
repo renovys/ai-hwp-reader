@@ -47,15 +47,21 @@ def _records(data):
     """레코드 스트림을 (tag, level, payload)로 풀어낸다."""
     out = []
     pos, end = 0, len(data)
-    while pos + 4 <= end:
+    while pos < end:
+        if pos + 4 > end:
+            raise ValueError("손상된 HWP 레코드: 헤더가 4바이트보다 짧다")
         header = struct.unpack_from('<I', data, pos)[0]
         tag = header & 0x3FF
         level = (header >> 10) & 0x3FF
         size = (header >> 20) & 0xFFF
         pos += 4
         if size == 0xFFF:
+            if pos + 4 > end:
+                raise ValueError("손상된 HWP 레코드: 확장 크기가 잘렸다")
             size = struct.unpack_from('<I', data, pos)[0]
             pos += 4
+        if size > end - pos:
+            raise ValueError("손상된 HWP 레코드: payload가 섹션 끝을 넘는다")
         out.append((tag, level, data[pos:pos + size]))
         pos += size
     return out
@@ -79,7 +85,11 @@ def _decode_text(payload):
         i += 1
     if run:
         out.append(run.decode('utf-16-le', 'replace'))
-    return ''.join(out)
+
+    # 실제 문서에서 U+001F 같은 C0 제어 문자가 글자 데이터로 남는 경우가 있다.
+    # 폭이 있는 HWP 제어문자와 달리 이미 UTF-16 글자로 해석된 뒤이므로 공백으로만 정리한다.
+    return ''.join(' ' if ord(ch) < 0x20 or ord(ch) == 0x7F else ch
+                   for ch in ''.join(out))
 
 
 def _read_stream(ole, name, compressed):
@@ -92,11 +102,17 @@ def _read_stream(ole, name, compressed):
     return raw
 
 
+def _section_number(name):
+    """Section10이 Section2보다 앞서는 문자열 정렬 문제를 막는다."""
+    match = re.search(r'(\d+)(?:\.xml)?$', name)
+    return int(match.group(1)) if match else sys.maxsize
+
+
 def _grid(cells, n_rows, n_cols):
     """셀 목록을 행·열 격자로 복원한다. 병합 셀은 좌상단에만 값을 둔다."""
     grid = [['' for _ in range(n_cols)] for _ in range(n_rows)]
     for c in cells:
-        if c['row'] < n_rows and c['col'] < n_cols:
+        if 0 <= c['row'] < n_rows and 0 <= c['col'] < n_cols:
             grid[c['row']][c['col']] = c['text']
     return [row for row in grid if any(v.strip() for v in row)]
 
@@ -104,6 +120,8 @@ def _grid(cells, n_rows, n_cols):
 def _parse_table(records, idx):
     """TABLE 레코드 하나를 읽어 격자와 셀 목록을 돌려준다."""
     tag, level, payload = records[idx]
+    if len(payload) < 8:
+        raise ValueError("손상된 HWP 표: TABLE payload가 8바이트보다 짧다")
     n_rows, n_cols = struct.unpack_from('<HH', payload, 4)
 
     cells, cur = [], None
@@ -173,8 +191,9 @@ def read_hwp(path):
     if head[36] & 0x02:
         raise RuntimeError(f"{path}: 암호가 걸린 문서다. 암호를 풀고 다시 저장할 것")
 
-    names = sorted(name for name in ole.listdir()
-                   if name.startswith('BodyText/Section'))
+    names = sorted((name for name in ole.listdir()
+                    if name.startswith('BodyText/Section')),
+                   key=_section_number)
     if not names:
         raise ValueError(f"{path}: BodyText 섹션이 없다")
 
@@ -292,6 +311,17 @@ def _hwpx_table(node):
             'grid': _grid(cells, n_rows, n_cols)}
 
 
+def _hwpx_append_memos(node, blocks):
+    """memo 또는 memogroup 하나를 중복 없이 메모 블록으로 추가한다."""
+    local = _hwpx_local(node.tag)
+    memos = ([node] if local == 'memo' else
+             [m for m in node.iter() if _hwpx_local(m.tag) == 'memo'])
+    for memo in memos:
+        text = _hwpx_text_of(memo)
+        if text:
+            blocks.append({'type': 'memo', 'text': text})
+
+
 def _hwpx_walk(node, blocks):
     """문서 순서를 지키며 문단·표·메모를 뽑는다.
 
@@ -306,11 +336,7 @@ def _hwpx_walk(node, blocks):
             if table['grid']:
                 blocks.append({'type': 'table', **table})
         elif local in ('memo', 'memogroup'):
-            for memo in ([child] if local == 'memo' else
-                         [m for m in child.iter() if _hwpx_local(m.tag) == 'memo']):
-                text = _hwpx_text_of(memo)
-                if text:
-                    blocks.append({'type': 'memo', 'text': text})
+            _hwpx_append_memos(child, blocks)
         elif local == 'p':
             _hwpx_paragraph(child, blocks)
         else:
@@ -318,7 +344,7 @@ def _hwpx_walk(node, blocks):
 
 
 def _hwpx_paragraph(para, blocks):
-    """문단 하나. 문단 도중에 표가 끼어들면 그 자리에서 표 블록으로 끊는다."""
+    """문단 하나. 문단 도중에 표나 메모가 끼어들면 그 자리에서 블록으로 끊는다."""
     buf = []
 
     def flush():
@@ -337,7 +363,8 @@ def _hwpx_paragraph(para, blocks):
                     blocks.append({'type': 'table', **table})
                 continue
             if local in ('memo', 'memogroup'):
-                _hwpx_walk(n, blocks)
+                flush()
+                _hwpx_append_memos(child, blocks)
                 continue
             if local == 't' and child.text:
                 buf.append(child.text)
@@ -354,8 +381,9 @@ def read_hwpx(path):
 
     blocks = []
     with zipfile.ZipFile(path) as z:
-        sections = sorted(n for n in z.namelist()
-                          if re.match(r'Contents/section\d+\.xml$', n))
+        sections = sorted((n for n in z.namelist()
+                           if re.match(r'Contents/section\d+\.xml$', n)),
+                          key=_section_number)
         if not sections:
             raise ValueError(f"{path}: Contents/sectionN.xml을 찾지 못했다")
 
@@ -386,6 +414,11 @@ def read(path):
     return read_hwp(path)
 
 
+def _md_cell(text):
+    """셀 안의 파이프가 Markdown 열 구분자로 해석되지 않게 한다."""
+    return text.replace('\\', '\\\\').replace('|', '\\|')
+
+
 def render(blocks, fmt='text', tables_only=False):
     lines = []
     for b in blocks:
@@ -400,9 +433,10 @@ def render(blocks, fmt='text', tables_only=False):
         if fmt == 'md':
             width = max(len(r) for r in grid)
             padded = [r + [''] * (width - len(r)) for r in grid]
-            lines.append('| ' + ' | '.join(padded[0]) + ' |')
+            escaped = [[_md_cell(cell) for cell in row] for row in padded]
+            lines.append('| ' + ' | '.join(escaped[0]) + ' |')
             lines.append('|' + '---|' * width)
-            for row in padded[1:]:
+            for row in escaped[1:]:
                 lines.append('| ' + ' | '.join(row) + ' |')
             lines.append('')
         else:

@@ -2,5 +2,5 @@
 
 from .parser import read, read_hwp, read_hwpx, render
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["read", "read_hwp", "read_hwpx", "render"]

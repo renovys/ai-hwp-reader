@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hwp-reader"
-version = "0.1.0"
+version = "0.2.0"
 description = "한컴 없이 HWP·HWPX 파일을 읽는 한글 문서 파서. 표는 병합 구조까지, 숨은 메모까지."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -13,6 +13,7 @@ authors = [{ name = "Junseog Seo" }]
 keywords = [
   "hwp", "hwpx", "hancom", "hangul", "korean", "hanword", "owpml",
   "hwp-parser", "hwp-reader", "mcp", "llm", "rag", "document",
+  "chatgpt", "claude", "gemini",
   "한컴", "한컴오피스", "한글", "한글파일", "아래아한글", "한글과컴퓨터", "HWP파싱", "표추출",
 ]
 classifiers = [
@@ -47,6 +48,7 @@ hwp-reader-mcp = "hwp_reader.mcp_server:main"
 Homepage = "https://github.com/renovys/hwp-reader"
 Issues = "https://github.com/renovys/hwp-reader/issues"
 Documentation = "https://github.com/renovys/hwp-reader/blob/main/docs/hwp-format.md"
+Changelog = "https://github.com/renovys/hwp-reader/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["hwp_reader*"]

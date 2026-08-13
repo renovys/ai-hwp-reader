@@ -1,11 +1,12 @@
 """파서 회귀 시험.
 
-여기 담긴 시험은 전부 `docs/hwp-format.md`에 적어 둔 함정에 대응한다.
+여기 담긴 시험은 `docs/hwp-format.md`에 적어 둔 파싱 함정에 대응한다.
 고장 나면 "그럴듯해 보이는데 틀린 결과"가 나오는 자리들이다.
 """
 
 import struct
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -13,10 +14,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from hwp_reader import parser, read, render          # noqa: E402
-from make_fixture import write_hwpx                  # noqa: E402
+from make_fixture import HP, HS, write_hwpx          # noqa: E402
 
-
-# ------------------------------------------------------------ HWP 5.0 레코드
 
 def _rec(tag, level, payload):
     if len(payload) >= 0xFFF:
@@ -40,16 +39,20 @@ def test_크기가_0xFFF면_뒤_4바이트가_진짜_크기다():
     ]
 
 
-# ------------------------------------------------------------ 함정 2·3 (글자)
+def test_잘린_레코드를_조용히_삼키지_않는다():
+    with pytest.raises(ValueError, match="payload"):
+        parser._records(_rec(parser.HWPTAG_PARA_TEXT, 0, b"abcd")[:-1])
+    with pytest.raises(ValueError, match="헤더"):
+        parser._records(b"\x00\x01")
+
 
 def _u16(*codes):
     return b"".join(struct.pack("<H", c) for c in codes)
 
 
 def test_넓은_제어문자는_16바이트를_건너뛴다():
-    """4~9번을 1워드로 처리하면 뒤 이진 데이터가 글자로 새어 나온다."""
     payload = (_u16(ord("가"))
-               + _u16(4) + b"\xff" * 14        # 제어문자 1워드 + 딸림 14바이트
+               + _u16(4) + b"\xff" * 14
                + _u16(ord("나")))
     assert parser._decode_text(payload) == "가나"
 
@@ -58,19 +61,20 @@ def test_좁은_제어문자는_공백_한_칸이_된다():
     assert parser._decode_text(_u16(ord("가"), 13, ord("나"))) == "가 나"
 
 
+def test_남은_C0_제어문자도_공백으로_정리한다():
+    assert parser._decode_text(_u16(ord("가"), 31, ord("나"))) == "가 나"
+
+
 def test_서로게이트_쌍이_깨지지_않는다():
     payload = "가𝕏나".encode("utf-16-le")
     assert parser._decode_text(payload) == "가𝕏나"
 
-
-# ------------------------------------------------------------ 함정 1 (셀 좌표)
 
 def _cell(col, row, colspan=1, rowspan=1):
     return b"\x00" * parser.CELL_OFFSET + struct.pack("<4H", col, row, colspan, rowspan)
 
 
 def test_셀_좌표는_오프셋_8부터_읽는다():
-    """오프셋 0부터 읽으면 모든 셀이 row=0으로 뭉개진다."""
     records = [
         (parser.HWPTAG_TABLE, 1, b"\x00" * 4 + struct.pack("<HH", 2, 2)),
         (parser.HWPTAG_LIST_HEADER, 1, _cell(0, 0)),
@@ -97,7 +101,10 @@ def test_병합_수를_그대로_들고_온다():
     assert table["cells"][0]["colspan"] == 2
 
 
-# ------------------------------------------------------------------ HWPX
+def test_잘린_TABLE_payload는_명시적으로_실패한다():
+    with pytest.raises(ValueError, match="TABLE payload"):
+        parser._parse_table([(parser.HWPTAG_TABLE, 1, b"1234567")], 0)
+
 
 @pytest.fixture()
 def 예산서(tmp_path):
@@ -105,7 +112,6 @@ def 예산서(tmp_path):
 
 
 def test_병합_헤더에서_열이_밀리지_않는다(예산서):
-    """cellAddr을 무시하면 셋째 줄이 0번 열부터 채워져 숫자가 통째로 밀린다."""
     table = next(b for b in read(예산서) if b["type"] == "table")
     assert table["cols"] == 7
     assert table["grid"][1] == ["품목", "규격", "수량", "단가", "", "금액", ""]
@@ -120,7 +126,6 @@ def test_주소가_없는_문서는_병합_수로_자리를_잡는다(tmp_path):
 
 
 def test_표_안_글자가_본문으로_다시_나오지_않는다(예산서):
-    """표를 품은 문단을 평평하게 훑으면 같은 표가 두 번 실린다."""
     texts = [b["text"] for b in read(예산서) if b["type"] == "text"]
     assert texts == ["◎ 예산 집행 내역", "이상."]
 
@@ -134,15 +139,43 @@ def test_문서_순서를_지킨다(예산서):
     assert [b["type"] for b in read(예산서)] == ["text", "table", "text", "memo"]
 
 
-# ------------------------------------------------------------------ 출력
+def test_섹션_번호를_숫자로_정렬한다(tmp_path):
+    path = tmp_path / "여러섹션.hwpx"
+    def xml(text):
+        return (f'<hs:sec xmlns:hp="{HP}" xmlns:hs="{HS}">'
+                f'<hp:p><hp:run><hp:t>{text}</hp:t></hp:run></hp:p></hs:sec>')
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("Contents/section10.xml", xml("열"))
+        z.writestr("Contents/section2.xml", xml("둘"))
+        z.writestr("Contents/section0.xml", xml("영"))
+    assert [b["text"] for b in read(path)] == ["영", "둘", "열"]
+
+
+def test_문단_안_메모가_앞뒤_본문을_중복시키지_않는다(tmp_path):
+    path = tmp_path / "문단메모.hwpx"
+    xml = (f'<hs:sec xmlns:hp="{HP}" xmlns:hs="{HS}"><hp:p><hp:run>'
+           '<hp:t>앞</hp:t><hp:memo><hp:p><hp:run><hp:t>검토</hp:t></hp:run></hp:p></hp:memo>'
+           '<hp:t>뒤</hp:t></hp:run></hp:p></hs:sec>')
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("Contents/section0.xml", xml)
+    assert read(path) == [
+        {"type": "text", "text": "앞"},
+        {"type": "memo", "text": "검토"},
+        {"type": "text", "text": "뒤"},
+    ]
+
 
 def test_마크다운_표는_열_수가_모든_줄에서_같다(예산서):
     lines = [l for l in render(read(예산서), "md").splitlines() if l.startswith("|")]
     assert len({l.count("|") for l in lines}) == 1
 
 
+def test_마크다운_셀의_파이프를_이스케이프한다():
+    blocks = [{"type": "table", "grid": [["조건", "값"], ["A|B", "1"]]}]
+    assert "A\\|B" in render(blocks, "md")
+
+
 def test_확장자가_틀려도_내용을_보고_읽는다(tmp_path):
-    """.hwp로 저장된 HWPX가 실제로 돌아다닌다."""
     path = write_hwpx(tmp_path / "잘못된확장자.hwp")
     assert any(b["type"] == "table" for b in read(path))
 

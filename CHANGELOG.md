@@ -3,13 +3,15 @@
 ## 0.3.0
 
 - 프로젝트 메시징을 **AI HWP Reader**로 재정의했습니다. 목표를 단순 HWP 파싱이 아니라 “AI가 HWP/HWPX를 직접 읽고 그 내용을 근거로 일하게 하는 것”으로 명확히 했습니다.
-- HWPX 셀 안의 중첩 표 내용을 더 이상 버리지 않고 `[중첩표]` 표기로 부모 셀 텍스트에 보존하며, `nested_tables` 구조도 함께 반환합니다.
+- README 첫 사용 흐름을 **`SKILL.md` 다운로드 → SKILL과 HWP/HWPX/ZIP을 채팅창에 함께 첨부 → `해줘`**로 재설계했습니다. 복사·붙여넣기가 필요 없습니다.
+- 여러 HWP/HWPX가 든 ZIP을 하위 폴더까지 자동 탐색하고, 멤버를 디스크에 다시 풀지 않고 메모리에서 직접 파싱합니다. `read_documents()` / `render_documents()` API와 CLI ZIP 입력을 추가했습니다.
+- HWP 변경 내용 추적이 저장되는 `ViewText/Section#`의 `PARA_RANGE_TAG`를 읽어 추가/삭제 변경 구간을 `revision` 블록으로 분리합니다. `BodyText`의 최종 본문과 섞지 않습니다.
+- HWP와 HWPX의 **표 안의 표**를 부모 셀 위치와 별도 `nested_tables` 구조로 보존하고 렌더링합니다.
 - HWP `FileHeader`가 실제 `HWP Document File` 시그니처인지 확인해 비-HWP OLE 문서를 조용히 오인하지 않습니다.
-- 손상된 `LIST_HEADER`, 음수 HWPX 셀 주소, 비정상적으로 큰 표 격자를 명시적으로 거부합니다.
-- 손상된 HWPX XML은 실패한 `sectionN.xml` 이름을 오류에 포함합니다.
+- 손상된 `LIST_HEADER`, 음수 HWPX 셀 주소, 비정상적으로 큰 표 격자, 손상 XML을 명시적으로 거부합니다.
 - HWPX 섹션 확장자의 대소문자가 달라도 숫자 순서대로 읽습니다.
-- `SKILL.md`를 “파싱부터 하고, 그 결과로 사용자의 실제 업무를 수행한다”는 AI 실행 흐름으로 강화했습니다.
-- README/영문 README/PyPI 메타데이터를 AI 중심 포지셔닝으로 전면 개편했습니다.
+- `SKILL.md`가 ZIP·중첩 표·메모·변경추적까지 읽은 뒤 사용자의 실제 업무를 계속 수행하도록 실행 지시를 강화했습니다.
+- PyPI 메타데이터와 한국어/영문 README를 AI 중심 포지셔닝으로 개편했습니다.
 
 ## 0.2.0
 

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -46,12 +46,25 @@ jobs:
         run: |
           ai-hwp-reader --version
           ai-hwp-reader --help
-      - name: 생성물 보관
-        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
-        uses: actions/upload-artifact@v4
+
+  finalize-generated:
+    if: github.ref == 'refs/heads/improve/extreme-hardening-v0.4.0-r3'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          name: generated-v04
-          path: |
-            SKILL.md
-            skill/hwp_reader_single.py
-          if-no-files-found: error
+          python-version: "3.12"
+      - name: 생성물 확정 및 임시 파일 정리
+        run: |
+          python tools/build_single.py
+          rm -f payload-v04-test.txt payload-v04-part*.txt v04code-p*.txt v04hex-p*.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "확정할 변경 없음"
+            exit 0
+          fi
+          git commit -m "0.4.0 생성물 동기화 및 임시 검증 파일 정리"
+          git push

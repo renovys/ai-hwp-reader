@@ -18,39 +18,43 @@ AI HWP Reader는 한글 문서의 본문뿐 아니라 **병합 표, 여러 단�
 
 ---
 
-## 한 번만 등록하면 끝입니다
+## 두 가지 방법이 있습니다
 
-터미널도, Python도, `pip install`도 몰라도 됩니다. 먼저
-[`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)을 받으세요.
+터미널도, Python도, `pip install`도 몰라도 됩니다.
 
-### 1. 채팅창에 올리고 "스킬로 등록해줘"라고 합니다
+### 1. 그때그때 채팅창에 올리기
 
-Claude Code처럼 **파일을 저장할 수 있는 AI**는 압축을 풀어 스킬 폴더에 넣는 것까지 알아서 합니다.
-한 번 넣으면 그대로 남습니다.
+[`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md)를 받아 채팅창에 한 번 올리면, **그 대화 안에서는** 계속 한글 문서로 일을 시킬 수 있습니다.
+파서가 그 파일 하나에 통째로 들어 있어 다른 준비물이 없습니다.
 
-Claude 웹·앱은 대화가 끝나면 실행 환경이 초기화되므로, 채팅창에서 등록하면 **그 대화에서만** 쓰입니다.
-계속 쓰려면 아래 2번으로 하세요.
+다만 **새 채팅창(대화)을 열면 다시 올려야 합니다.** 그게 번거로우면 2번으로 하세요.
 
-### 2. 앱 설정에서 한 번 등록합니다
+### 2. 한 번 등록해 두기
 
-- **Claude(웹·앱)** — 설정의 스킬(Skills)에서 새 스킬 만들기로 같은 zip을 올립니다. 이 등록은 계정에 남습니다.
-- **ChatGPT · Gemini** — zip 업로드를 받지 않으므로 [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md) 한 파일만 올리면 됩니다.
-  파서가 그 안에 통째로 들어 있어 이것만으로 동작합니다. 프로젝트나 맞춤 GPT에 넣어 두면 계속 쓸 수 있습니다.
+**Claude(웹·앱)** — [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)을 받아 설정 → 스킬(Skills) →
+새 스킬 만들기에서 zip 그대로 올립니다. 계정에 남으므로 이후 모든 대화에서 자동으로 발동합니다.
+Claude Code처럼 파일을 저장할 수 있는 환경이라면 채팅창에 zip을 주고 "스킬로 등록해줘"라고 해도 됩니다.
 
-등록해 두면 다음 대화부터는 한글 문서를 올리는 것만으로 알아서 발동합니다.
+**ChatGPT** — 사이드바 → 플러그인 → 스킬 탭 → 만들기 → **컴퓨터에서 업로드**에서 같은 zip을 올립니다.
+ChatGPT의 스킬은 Agent Skills 개방형 표준을 따르므로 이 패키지를 그대로 받습니다.
+업로드하면 검사(스캔)를 거친 뒤 사용할 수 있습니다. 몇 가지 유의할 점이 있습니다.
 
-### 3. 한글 문서를 올리고 평소처럼 일을 시킵니다
+- 개인용 스킬은 **Business·Enterprise·Healthcare·Edu 플랜**에서 제공됩니다. Enterprise·Edu는 관리자가 스킬을 켜 두어야 합니다.
+- **데스크톱 앱과 웹/모바일에 각각 등록해야 합니다.** 두 환경은 자동으로 동기화되지 않습니다.
+- 스킬을 쓸 수 없는 플랜이라면 1번처럼 `SKILL.md`를 올리면 됩니다. 프로젝트에 넣어 두면 그 프로젝트 안에서는 계속 쓰입니다.
+- 채팅창에 zip을 첨부하는 것은 등록이 아닙니다. ChatGPT는 대화 첨부로 `.zip`을 받지 않습니다.
+
+**Gemini** — 스킬에 해당하는 기능이 없으므로 1번처럼 `SKILL.md`를 문서와 함께 올립니다.
+
+자세한 안내: [ChatGPT의 스킬](https://help.openai.com/ko-kr/articles/20001066-skills-in-chatgpt) ·
+[Claude 커스텀 스킬 만들기](https://support.claude.com/en/articles/12512198-how-to-create-custom-skills)
+
+### 그다음은 평소처럼 일을 시키면 됩니다
 
 ```text
 사업계획서.hwp
 
 이거 읽고 표는 표대로 살려서 정리해줘
-```
-
-또는 그냥:
-
-```text
-해줘
 ```
 
 Gemini처럼 한글 문서를 그대로 읽는 모델도 있습니다. 다만 병합 셀이나 2·3단 헤더가 섞인 표에서는

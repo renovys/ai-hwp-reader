@@ -15,24 +15,43 @@ No Hancom Office · zero runtime dependencies for the core parser · read-only
 
 > HWP · HWPX · Hangul · Hancom · Arae-A Hangul → AI
 
-## Install it once, then just attach documents
+## Two ways to use it
 
 You do **not** need a terminal, Python knowledge, or `pip install`.
-Start by downloading [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip).
 
-1. **Drop it in the chat and say "register this as a skill."** Any AI that can save files — Claude Code, for one — unpacks it into your skills folder and it stays there. In the Claude web and mobile apps the sandbox resets between conversations, so registering from the chat lasts only for that conversation; use step 2 instead.
-2. **Or register it where your app keeps skills.**
-   - **Claude (web/app)** — Settings → Skills → create a skill and upload the same zip. That registration stays with your account.
-   - **ChatGPT · Gemini** — they reject zip uploads, so upload [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md) on its own. The parser is embedded in that one file, so nothing else is needed. Keep it in a Project or a custom GPT to reuse it.
-3. From then on, just attach a `.hwp`, `.hwpx`, or `.zip` and ask for the work you want done.
+### 1. Attach it per conversation
+
+Download [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md) and drop it into the chat once. For the rest of **that conversation** you can keep
+handing Claude/ChatGPT Hangul documents and asking for work. The parser is embedded in that single file, so nothing else is needed.
+
+Open a new conversation and you have to attach it again. If that gets old, install it once instead.
+
+### 2. Install it once
+
+**Claude (web/app)** — download [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip) and upload it as is under
+Settings → Skills → create a skill. It stays with your account and fires automatically from then on. In environments that can
+save files, such as Claude Code, you can also just hand the chat the zip and say "register this as a skill."
+
+**ChatGPT** — Sidebar → Plugins → Skills tab → Create → **Upload from computer**, using the same zip. ChatGPT skills follow the
+open Agent Skills standard, so this package installs as is; uploads are scanned before they become usable. Worth knowing:
+
+- Personal skills are available on the **Business, Enterprise, Healthcare and Edu** plans, and on Enterprise/Edu an admin has to enable them.
+- **Desktop and web/mobile are registered separately** — they do not sync.
+- On a plan without skills, use `SKILL.md` as in step 1; kept in a Project, it applies to every chat in that project.
+- Attaching the zip to a chat is not an installation — ChatGPT does not accept `.zip` as a conversation upload.
+
+**Gemini** — no skills equivalent, so attach `SKILL.md` alongside your document as in step 1.
+
+Details: [Skills in ChatGPT](https://help.openai.com/en-us/articles/20001066-skills-in-chatgpt) ·
+[Create custom skills for Claude](https://support.claude.com/en/articles/12512198-how-to-create-custom-skills)
 
 Some models, Gemini among them, already read Hangul documents directly. Where this parser pulls ahead is complex tables — merged cells and two- or three-row headers, whose cell coordinates it restores instead of flattening.
 
 `SKILL.md` contains the complete zero-dependency parser plus execution instructions. In an AI environment that can execute Python, the model runs the parser against the attached file and then uses the parsed result to continue the task.
 
 ```text
-SKILL.md + agreement.hwp
-→ “do it”
+SKILL.md + proposal.hwp
+→ “read this and lay out the tables as tables”
 → read the document → preserve tables/comments/revisions → summarize or review it
 ```
 

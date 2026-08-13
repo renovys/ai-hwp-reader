@@ -35,7 +35,7 @@ def test_HWP_LIST_HEADER가_잘리면_명시적으로_실패한다():
         parser._parse_table(records, 0)
 
 
-def test_HWPX_중첩표를_부모셀과_구조양쪽에_보존한다(tmp_path):
+def test_HWPX_중첩표를_부모셀위치와_별도구조로_보존한다(tmp_path):
     inner = (
         '<hp:tbl rowCnt="1" colCnt="2"><hp:tr>'
         '<hp:tc><hp:cellAddr colAddr="0" rowAddr="0"/><hp:cellSpan colSpan="1" rowSpan="1"/>'
@@ -56,9 +56,13 @@ def test_HWPX_중첩표를_부모셀과_구조양쪽에_보존한다(tmp_path):
         z.writestr("Contents/section0.xml", xml)
 
     table = next(b for b in parser.read(path) if b["type"] == "table")
-    cell = table["cells"][0]
-    assert cell["nested_tables"][0]["grid"] == [["A", "B"]]
-    assert cell["text"] == "앞 [중첩표] A | B 뒤"
+    assert table["grid"][0][0] == "앞뒤 ⟨표 안의 표⟩"
+    nested = table["nested_tables"][0]
+    assert (nested["row"], nested["col"]) == (0, 0)
+    assert nested["table"]["grid"] == [["A", "B"]]
+    output = parser.render([table], "md")
+    assert "[표 안의 표 · 1행 1열]" in output
+    assert "A" in output and "B" in output
 
 
 def test_HWPX_음수_셀주소는_조용히_보정하지_않는다(tmp_path):

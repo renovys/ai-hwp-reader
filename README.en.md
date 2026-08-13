@@ -1,9 +1,10 @@
 # AI HWP Reader
 
-### Your AI can now read HWP/HWPX — and actually work with the **tables, numbers and hidden comments inside.**
+## Your AI can now read HWP — and work with the document.
 
-**An AI-native HWP/HWPX reader for ChatGPT, Claude and Gemini.**  
-No Hancom Office · zero runtime dependencies · read-only
+Give **ChatGPT, Claude or Gemini** the original Korean HWP/HWPX file. AI HWP Reader recovers the parts that matter for real work: **merged tables, tables inside tables, hidden comments, and tracked changes**.
+
+No Hancom Office · zero runtime dependencies for the core parser · read-only
 
 [![PyPI](https://img.shields.io/pypi/v/hwp-reader)](https://pypi.org/project/hwp-reader/)
 [![Python](https://img.shields.io/pypi/pyversions/hwp-reader)](https://pypi.org/project/hwp-reader/)
@@ -12,130 +13,98 @@ No Hancom Office · zero runtime dependencies · read-only
 
 [한국어](README.md)
 
-> The goal is not merely to parse Korea's HWP (Hangul / Hancom / Arae-A Hangul) format in Python. The goal is to let an AI execute the parser itself, recover the document structure, and then use that structure to do real work.
+> HWP · HWPX · Hangul · Hancom · Arae-A Hangul → AI
 
-## Let the AI work with the HWP, not just “open” it
+## The easiest way: download one file, attach it, say “do it”
 
-The old workflow looks like this:
+You do **not** need a terminal, Python knowledge, or `pip install`.
 
-```text
-HWP → open in Hancom Office → export to PDF/text → upload again → ask the AI
-```
+1. **[Download `SKILL.md`](./SKILL.md?raw=1)**
+2. Attach `SKILL.md` together with your `.hwp`, `.hwpx`, or `.zip` file to the AI chat.
+3. Say **“do it”** — or ask for the actual work you want done.
 
-AI HWP Reader is built for this workflow instead:
-
-```text
-HWP/HWPX → AI runs parser → text + tables + comments → analyze, review, summarize
-```
-
-In an AI environment that can execute Python, paste `SKILL.md`, upload the document, and ask for the work you want done. The parser uses only the Python standard library and makes no network requests.
-
-Examples:
+`SKILL.md` contains the complete zero-dependency parser plus execution instructions. In an AI environment that can execute Python, the model runs the parser against the attached file and then uses the parsed result to continue the task.
 
 ```text
-Extract fund size, requested commitment, term, management fee and carry from this proposal.
-Find only the investment restriction risks in this compliance checklist.
-Compare transfer restrictions, ROFR and tag-along provisions in this agreement.
-Recalculate the totals in this budget table and flag suspicious cells.
-Show me only the reviewer comments hidden in the HWP file.
+SKILL.md + agreement.hwp
+→ “do it”
+→ read the document → preserve tables/comments/revisions → summarize or review it
 ```
-
-## Three steps, no installation
-
-1. Open [SKILL.md](SKILL.md) and **copy the whole file**.
-2. Paste it into a code-executing ChatGPT, Claude or Gemini conversation, then upload `.hwp` or `.hwpx` files.
-3. Ask for the result or the task: **“show me this”**, **“summarize it”**, **“check the numbers”**.
-
-`SKILL.md` contains both the zero-dependency parser and explicit instructions telling the model to **run the parser instead of merely explaining the code**. If the environment cannot execute Python, the skill tells the model not to pretend that it read the document.
-
-Multiple files can be processed in one run:
-
-```bash
-python hwp_reader_single.py contract.hwp articles.hwp application.hwpx
-```
-
-## Why tables matter for AI
-
-Korean government, school and corporate documents often place their critical information inside tables: investment proposals, compliance checklists, budgets, quotations, agreements and application forms.
-
-A text-only extraction path can appear successful while silently dropping the values the AI actually needs:
 
 ```text
-◎ Investment overview
-<table>
-
-◎ Key terms
-<table>
+SKILL.md + documents.zip
+→ “compare these”
+→ find every HWP/HWPX inside the ZIP → parse each file → compare them
 ```
 
-If that is all the model receives, amounts, ownership percentages, conditions, dates and review results may be gone.
+The point is to remove the manual chain of opening HWP in Hancom Office, exporting PDF/text, repairing tables, and re-explaining the document to the AI.
 
-AI HWP Reader restores the grid from the row/column addresses and merge spans stored in the document:
+## Reading HWP is not enough. The structure has to survive.
+
+Important Korean business documents often place the actual facts inside tables. A flat text extractor can make a document look readable while silently losing amounts, ownership percentages, conditions, approval fields, or compliance results.
+
+AI HWP Reader uses the stored cell coordinates and merge ranges instead of guessing the table layout.
+
+It also preserves information that is easy to miss:
+
+| Document structure | Support |
+|---|---:|
+| HWP 5.0 / HWPX body text | ✅ |
+| Tables | ✅ |
+| Merged cells and multi-row headers | ✅ |
+| **Nested tables (table inside a cell)** | ✅ |
+| Hidden comments / memos | ✅ |
+| **HWP tracked insertions and deletions** | ✅ |
+| Multiple sections in numeric order | ✅ |
+| Wrong `.hwp` / `.hwpx` filename extension | ✅ content detection |
+| **ZIP containing multiple HWP/HWPX files** | ✅ recursive member discovery |
+| Password-protected documents | ❌ unlock first |
+| Scanned-image OCR | ❌ |
+| Full conversion of Hancom equation objects | ❌ |
+| HWP 3.0 and older formats | ❌ |
+| Writing or modifying HWP | ❌ read-only |
+
+### Nested tables
+
+A table cell may contain another table. AI HWP Reader keeps the parent-cell location and renders the inner table separately instead of dropping it.
 
 ```text
-| Item | Spec | Qty | List price | Discount | Supply amount | VAT |
-|---|---|---|---|---|---|---|
-| Office chair | KS-320 | 12 | 180,000 | 162,000 | 1,944,000 | 194,400 |
+[table inside table · row 3 column 2]
+| item | amount |
+|---|---:|
+| A | 100 |
 ```
 
-Hidden reviewer comments are emitted separately:
+### Hidden comments
+
+Review comments stored outside ordinary body text are emitted separately:
 
 ```text
-[메모] Please update this using the latest data.
+[메모] Replace this with the latest figure.
 ```
 
-## Preserve the structures AI is most likely to lose
+### Tracked changes
 
-| Problem | AI HWP Reader |
-|---|---|
-| Multi-row merged headers | Restores positions from `row`, `col`, `rowspan`, `colspan` |
-| Tables inside table cells | Keeps nested table contents with a `[중첩표]` marker and retains the nested structure |
-| Hidden HWP comments | Extracts both the location marker and comment text |
-| Multiple sections | Sorts section numbers numerically, not lexicographically |
-| Wrong `.hwp` / `.hwpx` extension | Detects the actual container instead of trusting the filename |
-| Corrupted documents | Fails explicitly instead of returning a plausible partial result |
-| `|` inside Markdown cells | Escapes the delimiter so columns do not shift |
-| Original document | **Read-only** — never rewrites the HWP/HWPX |
+For HWP files with change tracking, the final `BodyText` remains the final document. Insert/delete ranges stored in `ViewText/Section#` are emitted separately:
 
-The base parser even includes its own HWP 5.0 OLE/CFB reader, so it has **zero runtime dependencies** outside the Python standard library.
+```text
+[변경추적 삭제] old wording
+[변경추적 추가] revised wording
+```
 
-## Designed for AI input, not feature count
+### ZIP archives
 
-The priority is the quality of the document representation handed to the model:
-
-- **Preserve structure** — table columns must not silently shift.
-- **Avoid omissions** — hidden comments and nested tables should not disappear.
-- **Keep document order** — context depends on where content appears.
-- **Fail loudly** — an explicit error is safer than a convincing partial parse.
-- **Run offline** — chatbot sandboxes may not have internet or package installation.
-- **Stay read-only** — parsing should never damage the source document.
-
-## Support matrix
-
-| Feature | Support |
-|---|---|
-| HWP 5.0 text | ✅ |
-| HWP 5.0 tables / merged cells | ✅ |
-| HWP comments | ✅ |
-| HWPX text / tables | ✅ |
-| HWPX nested table contents | ✅ |
-| HWPX comments | ✅ |
-| Detect mismatched `.hwp` / `.hwpx` extensions | ✅ |
-| Encrypted documents | ❌ decrypt and resave first |
-| Full text recovery for Hancom equation objects | ❌ |
-| OCR for scanned images | ❌ |
-| HWP 3.0 and other legacy formats | ❌ |
-| Writing / editing documents | ❌ |
+A ZIP can contain HWP/HWPX files in nested folders. `read_documents()` finds them without extracting the archive to a temporary directory and keeps file boundaries in the output.
 
 ## For developers
 
-The project brand is **AI HWP Reader**. For compatibility, the PyPI package, Python import and CLI keep their existing names: `hwp-reader` / `hwp_reader`.
-
-### Install
+The product/brand is **AI HWP Reader**. For compatibility, the PyPI package, import name, and CLI remain `hwp-reader`, `hwp_reader`, and `hwp-reader`.
 
 ```bash
 pip install hwp-reader
 ```
+
+Core runtime dependencies: **0**.
 
 ### Python
 
@@ -146,89 +115,54 @@ blocks = read("document.hwp")
 print(render(blocks, "md"))
 ```
 
-`read()` returns blocks in document order:
+For a ZIP or a bundle of documents:
 
 ```python
-{"type": "text",  "text": "..."}
-{"type": "table", "rows": 9, "cols": 5, "grid": [[...], ...], "cells": [...]}
-{"type": "memo",  "text": "Please update this."}
+from hwp_reader import read_documents, render_documents
+
+documents = read_documents("bundle.zip")
+print(render_documents(documents, "md"))
 ```
 
-Each table cell includes `row`, `col`, `rowspan`, `colspan`, and `text`. HWPX cells containing nested tables also expose `nested_tables`.
+Block types include `text`, `table`, `memo`, and `revision`. Tables expose their grid, cell coordinates, spans, and nested tables.
 
 ### CLI
 
 ```bash
-hwp-reader document.hwp
 hwp-reader document.hwp --format md
+hwp-reader document.hwpx --format json
+hwp-reader bundle.zip --format md
 hwp-reader document.hwp --tables-only
 hwp-reader document.hwp --memos-only
+hwp-reader document.hwp --revisions-only
 hwp-reader ./folder -r
-hwp-reader ./folder --format md -o ./out
-hwp-reader document.hwp --format json
 ```
 
-## Claude Desktop / Cursor MCP
-
-Install the optional MCP extra if you want a local AI client to read paths directly:
+### MCP
 
 ```bash
 pip install "hwp-reader[mcp]"
 ```
 
-```json
-{
-  "mcpServers": {
-    "hwp-reader": {
-      "command": "hwp-reader-mcp"
-    }
-  }
-}
-```
+The MCP tools are read-only as well.
 
-All MCP tools are read-only.
+## Accuracy philosophy
 
-| Tool | Result |
-|---|---|
-| `hwp_read` | text, tables and comments in document order |
-| `hwp_tables` | table grids as JSON |
-| `hwp_memos` | hidden comments only |
+A parser that crashes is obvious. A parser that returns plausible-but-wrong values is more dangerous for AI workflows.
 
-## Validation philosophy: “no exception” is not enough
+Regression tests therefore focus on silent-failure cases: cell coordinate offsets, row/column spans, multi-row headers, HWP control widths, surrogate pairs, section ordering, cells without explicit HWPX addresses, nested tables, hidden comments, tracked-change ranges, Markdown escaping, malformed records/XML, oversized table allocation, ZIP traversal, and generated `SKILL.md` synchronization.
 
-The dangerous failure mode in HWP parsing is a result that **looks reasonable but is wrong**. An AI can confidently reason over a missing amount or a shifted table column.
+CI covers Python 3.9–3.13 on Linux, macOS, and Windows.
 
-Regression tests therefore target:
+## Privacy and design constraints
 
-- HWP cell offsets and merge spans
-- HWP control-code widths and residual C0 controls
-- UTF-16 surrogate pairs
-- the real HWP FileHeader signature
-- numeric section ordering in HWP and HWPX
-- merged-cell fallback when HWPX cell addresses are omitted
-- HWPX nested-table preservation
-- duplicate text prevention inside tables
-- inline comment ordering
-- Markdown cell escaping
-- explicit failure on truncated records and pathological table dimensions
-- synchronization of generated `skill/hwp_reader_single.py` and `SKILL.md`
-
-CI runs on Python 3.9–3.13 across Linux, macOS and Windows.
-
-## Performance
-
-Typical business documents are read in roughly **0.1 seconds per document**.
-
-## Project principles
-
-- **Read-only**: no HWP/HWPX writing or editing.
-- **No private fixtures in the repo**: real business files are used only for local regression checks.
-- **One source of truth**: `skill/hwp_reader_single.py` and `SKILL.md` are generated by `tools/build_single.py`.
-- **Offline parser**: no network requests.
-- **AI-input quality first**: preserving tables, comments and ordering matters more than adding unrelated features.
-
-See [docs/hwp-format.md](docs/hwp-format.md) for low-level format notes and [CHANGELOG.md](CHANGELOG.md) for release history.
+- The core parser makes no network requests.
+- Documents are read-only; it never rewrites HWP/HWPX.
+- Real business documents may be used privately for regression validation but are never committed as test fixtures.
+- `SKILL.md` and `skill/hwp_reader_single.py` are generated from the parser source by `tools/build_single.py`.
 
 ## License
 
 MIT
+
+Implemented from the published HWP 5.0 / OWPML document formats.

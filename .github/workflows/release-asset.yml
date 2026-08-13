@@ -1,0 +1,31 @@
+name: release-asset
+
+# 릴리스가 게시되면 SKILL.md를 그 릴리스의 자산으로 올린다.
+# 자산 링크(releases/latest/download/SKILL.md)만 Content-Disposition: attachment로 내려가
+# 클릭 즉시 저장된다. 저장소 안의 raw 링크는 브라우저에서 그냥 열린다.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: 생성물 재생성 (커밋본과 어긋나면 실패)
+        run: |
+          python tools/build_single.py
+          git diff --exit-code -- SKILL.md skill/hwp_reader_single.py
+      - name: 릴리스에 SKILL.md 첨부
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: gh release upload "$TAG" SKILL.md --clobber

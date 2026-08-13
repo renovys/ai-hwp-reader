@@ -71,6 +71,12 @@ ways in.
 pip install "hwp-reader[mcp]"
 ```
 
+> **Skip this if you are not using MCP.** The base install pulls exactly one package,
+> `olefile`. The `[mcp]` extra brings the MCP Python SDK, which in turn pulls an HTTP
+> server stack (uvicorn, starlette, pydantic and friends) for a total of 29 packages.
+> That is the SDK's own dependency tree, so it is kept strictly optional — the CLI and
+> the Python API work fully without it.
+
 ```bash
 claude mcp add hwp-reader -- hwp-reader-mcp     # Claude Code
 codex mcp add hwp-reader -- hwp-reader-mcp      # Codex CLI

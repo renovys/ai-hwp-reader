@@ -30,7 +30,7 @@ Node.js도 필요 없습니다. 의존성은 `olefile` 하나뿐이고 맥·리�
 |---|---|
 | 설치 | `pip install hwp-reader` — 한 번이면 끝, 폐쇄망도 wheel 하나 |
 | 실행에 필요한 것 | 파이썬 3.9 이상. 그게 전부입니다 |
-| 의존성 | `olefile` 1개 (HWPX는 표준 라이브러리만) |
+| 의존성 | `olefile` **1개**. HWPX는 표준 라이브러리만 (MCP 서버로 쓸 때만 SDK 추가) |
 | 붙는 곳 | MCP 클라이언트 전부 · 웹 챗봇 · 파이썬 코드 · 셸 |
 | 쓰는 방법 | CLI · `import hwp_reader` · MCP 서버(stdio/HTTP) |
 | 문서를 고치나 | 아니요. **읽기 전용**입니다 |
@@ -82,6 +82,12 @@ hwp-reader는 같은 문서를 이렇게 읽습니다.
 ```bash
 pip install "hwp-reader[mcp]"
 ```
+
+> **MCP를 안 쓰시면 이 줄은 필요 없습니다.** 기본 설치(`pip install hwp-reader`)가
+> 끌어오는 패키지는 `olefile` 하나뿐입니다. `[mcp]`를 붙이면 MCP 파이썬 SDK가
+> 딸려 오는데, 그 SDK가 HTTP 서버 스택(uvicorn·starlette·pydantic 등)까지 함께
+> 가져와 29개가 됩니다. SDK 쪽 구조라 더 줄일 수 없어서, 아예 선택 항목으로
+> 떼어 놨습니다. CLI와 파이썬 API는 이것 없이 그대로 다 됩니다.
 
 **Claude Code**
 

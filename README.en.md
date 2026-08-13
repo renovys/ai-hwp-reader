@@ -29,14 +29,15 @@ Open a new conversation and you have to attach it again. If that gets old, insta
 ### 2. Install it once
 
 **Claude (web/app)** — download [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip) and upload it as is under
-Settings → Skills → create a skill. It stays with your account and fires automatically from then on. In environments that can
+Settings → Skills → create a skill. It stays with your account and fires automatically from then on; upload it on either
+the web or the app and both pick it up. In environments that can
 save files, such as Claude Code, you can also just hand the chat the zip and say "register this as a skill."
 
-**ChatGPT** — Sidebar → Plugins → Skills tab → Create → **Upload from computer**, using the same zip. ChatGPT skills follow the
-open Agent Skills standard, so this package installs as is; uploads are scanned before they become usable. Worth knowing:
+**ChatGPT** — the web app is the easy path: Settings → Plugins → **Browse plugins** at the bottom → **Skills** tab at the top →
+**[+]** → **Upload from computer**, using the same zip. ChatGPT skills follow the open Agent Skills standard, so this package
+installs as is; uploads are scanned before they become usable. Register once on the web and the app picks it up too.
 
 - Personal skills are available on the **Business, Enterprise, Healthcare and Edu** plans, and on Enterprise/Edu an admin has to enable them.
-- **Desktop and web/mobile are registered separately** — they do not sync.
 - On a plan without skills, use `SKILL.md` as in step 1; kept in a Project, it applies to every chat in that project.
 - Attaching the zip to a chat is not an installation — ChatGPT does not accept `.zip` as a conversation upload.
 

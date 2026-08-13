@@ -160,8 +160,9 @@ def main():
     SINGLE_SOURCE.parent.mkdir(parents=True, exist_ok=True)
     SINGLE_SOURCE.write_text(single, encoding="utf-8")
     SKILL_SOURCE.write_text(build_skill(single), encoding="utf-8")
-    print(f"생성: {SINGLE_SOURCE.relative_to(ROOT)}")
-    print("생성: SKILL.md")
+    # CI/Windows 콘솔의 cp1252에서도 빌드 자체가 성공해야 한다.
+    print(f"generated: {SINGLE_SOURCE.relative_to(ROOT)}")
+    print("generated: SKILL.md")
 
 
 if __name__ == "__main__":

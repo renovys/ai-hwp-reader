@@ -22,7 +22,9 @@ AI HWP Reader는 한글 문서의 본문뿐 아니라 **병합 표, 여러 단�
 
 터미널도, Python도, `pip install`도 몰라도 됩니다.
 
-### 1. [`SKILL.md`](./SKILL.md?raw=1)를 받습니다
+### 1. [`SKILL.md`](https://raw.githubusercontent.com/renovys/ai-hwp-reader/main/SKILL.md)를 받습니다
+
+열린 화면에서 `Ctrl+S`(맥은 `Cmd+S`)로 저장하세요.
 
 ### 2. `SKILL.md`와 HWP/HWPX를 AI 채팅창에 같이 올립니다
 

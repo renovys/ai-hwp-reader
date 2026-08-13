@@ -33,7 +33,7 @@ classifiers = [
   "Topic :: Text Processing :: Markup",
   "Topic :: Utilities",
 ]
-dependencies = ["olefile>=0.47"]
+dependencies = []
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0.0"]

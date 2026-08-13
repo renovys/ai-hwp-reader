@@ -20,19 +20,24 @@ AI HWP Reader는 한글 문서의 본문뿐 아니라 **병합 표, 여러 단�
 
 ## 한 번만 등록하면 끝입니다
 
-터미널도, Python도, `pip install`도 몰라도 됩니다.
+터미널도, Python도, `pip install`도 몰라도 됩니다. 먼저
+[`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)을 받으세요.
 
-### 1. [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)을 받습니다
+### 1. 채팅창에 올리고 "스킬로 등록해줘"라고 합니다
 
-클릭하면 바로 내려받습니다.
+Claude Code처럼 **파일을 저장할 수 있는 AI**는 압축을 풀어 스킬 폴더에 넣는 것까지 알아서 합니다.
+한 번 넣으면 그대로 남습니다.
 
-### 2. AI에 스킬로 한 번 등록합니다
+Claude 웹·앱은 대화가 끝나면 실행 환경이 초기화되므로, 채팅창에서 등록하면 **그 대화에서만** 쓰입니다.
+계속 쓰려면 아래 2번으로 하세요.
 
-- **Claude** — 설정의 스킬(Skills)에서 새 스킬 만들기로 이 zip을 그대로 올립니다.
-- **ChatGPT** — 프로젝트나 맞춤 GPT에 zip 안의 `SKILL.md`와 `scripts/hwp_reader_single.py`를 파일로 넣어 둡니다.
+### 2. 앱 설정에서 한 번 등록합니다
 
-한 번 등록해 두면 다음 대화부터는 한글 문서를 올리는 것만으로 알아서 발동합니다.
-등록 없이 그때그때 쓰려면 [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md)만 받아 문서와 함께 첨부해도 됩니다.
+- **Claude(웹·앱)** — 설정의 스킬(Skills)에서 새 스킬 만들기로 같은 zip을 올립니다. 이 등록은 계정에 남습니다.
+- **ChatGPT · Gemini** — zip 업로드를 받지 않으므로 [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md) 한 파일만 올리면 됩니다.
+  파서가 그 안에 통째로 들어 있어 이것만으로 동작합니다. 프로젝트나 맞춤 GPT에 넣어 두면 계속 쓸 수 있습니다.
+
+등록해 두면 다음 대화부터는 한글 문서를 올리는 것만으로 알아서 발동합니다.
 
 ### 3. 한글 문서를 올리고 평소처럼 일을 시킵니다
 

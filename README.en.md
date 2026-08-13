@@ -18,14 +18,13 @@ No Hancom Office · zero runtime dependencies for the core parser · read-only
 ## Install it once, then just attach documents
 
 You do **not** need a terminal, Python knowledge, or `pip install`.
+Start by downloading [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip).
 
-1. **[Download `ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)** — one click, saves straight to your machine.
-2. Register it once with your AI:
-   - **Claude** — Settings → Skills → create a skill and upload the zip as is.
-   - **ChatGPT** — add `SKILL.md` and `scripts/hwp_reader_single.py` from the zip as files in a Project or a custom GPT.
+1. **Drop it in the chat and say "register this as a skill."** Any AI that can save files — Claude Code, for one — unpacks it into your skills folder and it stays there. In the Claude web and mobile apps the sandbox resets between conversations, so registering from the chat lasts only for that conversation; use step 2 instead.
+2. **Or register it where your app keeps skills.**
+   - **Claude (web/app)** — Settings → Skills → create a skill and upload the same zip. That registration stays with your account.
+   - **ChatGPT · Gemini** — they reject zip uploads, so upload [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md) on its own. The parser is embedded in that one file, so nothing else is needed. Keep it in a Project or a custom GPT to reuse it.
 3. From then on, just attach a `.hwp`, `.hwpx`, or `.zip` and ask for the work you want done.
-
-Prefer not to install anything? Download [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md) and attach it alongside your document each time.
 
 Some models, Gemini among them, already read Hangul documents directly. Where this parser pulls ahead is complex tables — merged cells and two- or three-row headers, whose cell coordinates it restores instead of flattening.
 

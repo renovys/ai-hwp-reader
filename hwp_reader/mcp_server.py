@@ -1,21 +1,7 @@
 """ai-hwp-reader MCP 서버.
 
-MCP를 말하는 도구라면 무엇에든 붙습니다. Claude Code·Claude Desktop, Codex CLI,
-Gemini CLI, Cursor, VS Code, Windsurf, Zed 모두 같은 한 줄로 등록합니다.
-
-    ai-hwp-reader-mcp                 stdio (기본. 로컬 CLI·데스크톱 앱용)
-    ai-hwp-reader-mcp --transport http --port 8000
-                                   streamable HTTP (원격 커넥터를 받는 웹 클라이언트용)
-
-도구는 세 개뿐입니다. 읽기 전용이라 문서를 건드리지 않고, 네트워크로 문서를
-보내지도 않습니다.
-
-    hwp_read     본문·표·메모를 문서 순서대로
-    hwp_tables   표만, 격자 그대로
-    hwp_memos    숨은 메모만
-
-MCP 파이썬 SDK는 2.0에서 `FastMCP`가 `MCPServer`로 바뀌었습니다. 둘 다 지원하므로
-어느 버전이 깔려 있어도 그대로 돕니다.
+Claude Code·Claude Desktop, Codex CLI, Gemini CLI, Cursor, VS Code 등 MCP
+클라이언트에서 HWP/HWPX/ZIP을 읽기 전용으로 다룬다. 문서를 네트워크로 보내지 않는다.
 """
 
 import argparse
@@ -24,27 +10,30 @@ import os
 import sys
 
 from . import __version__
-from .parser import read, render
+from .parser import read_documents, render_documents
 
-try:                                                   # SDK 2.x
+try:
     from mcp.server import MCPServer as _Server
 except ImportError:                                    # pragma: no cover
-    try:                                               # SDK 1.x
+    try:
         from mcp.server.fastmcp import FastMCP as _Server
     except ImportError:
         sys.exit("MCP SDK가 없습니다.  pip install 'ai-hwp-reader[mcp]'")
 
 mcp = _Server("ai-hwp-reader")
-
-_LIMIT = 400_000        # 한 번에 돌려줄 최대 글자 수
+_LIMIT = 400_000
+_EXTENSIONS = (".hwp", ".hwpx", ".zip")
 
 
 def _paths(target: str) -> list:
     if os.path.isfile(target):
         return [target]
     if os.path.isdir(target):
-        return sorted(os.path.join(target, n) for n in os.listdir(target)
-                      if n.lower().endswith((".hwp", ".hwpx")))
+        return sorted(
+            os.path.join(target, name)
+            for name in os.listdir(target)
+            if name.lower().endswith(_EXTENSIONS)
+        )
     raise FileNotFoundError(f"{target}: 파일이나 폴더를 찾을 수 없습니다")
 
 
@@ -54,72 +43,113 @@ def _clip(text: str) -> str:
     return text[:_LIMIT] + f"\n\n…(길이 제한으로 잘렸습니다. 전체 {len(text):,}자)"
 
 
+def _json(value) -> str:
+    text = json.dumps(value, ensure_ascii=False, indent=1)
+    if len(text) <= _LIMIT:
+        return text
+    # JSON을 중간에서 잘라 문법을 깨뜨리지 않는다.
+    return json.dumps(
+        {
+            "truncated": True,
+            "message": f"응답이 {_LIMIT:,}자 제한을 넘어 미리보기만 반환합니다.",
+            "preview": text[:_LIMIT // 2],
+        },
+        ensure_ascii=False,
+        indent=1,
+    )
+
+
+def _docs(path):
+    return read_documents(path)
+
+
 @mcp.tool()
 def hwp_read(path: str, format: str = "text") -> str:
-    """한글 문서(HWP/HWPX)를 읽어 본문·표·메모를 문서 순서대로 돌려준다.
-
-    Args:
-        path: .hwp/.hwpx 파일 경로, 또는 그런 파일이 든 폴더 경로
-        format: "text"(기본) 또는 "md"(표를 마크다운으로)
-    """
+    """HWP/HWPX/ZIP 또는 해당 파일들이 든 폴더를 읽어 구조 보존 텍스트를 반환한다."""
     out = []
-    for p in _paths(path):
+    for item in _paths(path):
         try:
-            out.append(f"===== {os.path.basename(p)} =====\n"
-                       + render(read(p), format))
+            out.append(render_documents(_docs(item), format))
         except Exception as exc:                       # noqa: BLE001
-            out.append(f"===== {os.path.basename(p)} =====\n[실패] {exc}")
+            out.append(f"===== {os.path.basename(item)} =====\n[실패] {exc}")
     return _clip("\n\n".join(out))
 
 
 @mcp.tool()
 def hwp_tables(path: str) -> str:
-    """표만 JSON 격자로 돌려준다. 병합된 셀은 좌상단에만 값이 들어간다.
-
-    Args:
-        path: .hwp/.hwpx 파일 경로 또는 폴더 경로
-    """
+    """HWP/HWPX/ZIP의 표만 JSON 격자로 반환한다."""
     out = []
-    for p in _paths(path):
+    for item in _paths(path):
         try:
-            tables = [{"rows": b["rows"], "cols": b["cols"], "grid": b["grid"]}
-                      for b in read(p) if b["type"] == "table"]
-            out.append({"file": os.path.basename(p), "tables": tables})
+            for doc in _docs(item):
+                if doc.get("error"):
+                    out.append({"file": doc["file"], "error": doc["error"]})
+                    continue
+                tables = [
+                    {"rows": block["rows"], "cols": block["cols"], "grid": block["grid"]}
+                    for block in doc.get("blocks", [])
+                    if block.get("type") == "table"
+                ]
+                out.append({"file": doc["file"], "tables": tables})
         except Exception as exc:                       # noqa: BLE001
-            out.append({"file": os.path.basename(p), "error": str(exc)})
-    return _clip(json.dumps(out, ensure_ascii=False, indent=1))
+            out.append({"file": os.path.basename(item), "error": str(exc)})
+    return _json(out)
 
 
 @mcp.tool()
 def hwp_memos(path: str) -> str:
-    """문서에 달린 숨은 메모(주석)만 뽑아낸다.
-
-    본문에는 보이지 않아 놓치기 쉬운 검토 요청이 여기 들어 있는 경우가 많다.
-
-    Args:
-        path: .hwp/.hwpx 파일 경로 또는 폴더 경로
-    """
+    """HWP/HWPX/ZIP의 숨은 메모만 파일별로 반환한다."""
     lines = []
-    for p in _paths(path):
+    for item in _paths(path):
         try:
-            memos = [b["text"] for b in read(p) if b["type"] == "memo"]
+            for doc in _docs(item):
+                if doc.get("error"):
+                    lines.append(f"{doc['file']}: [실패] {doc['error']}")
+                    continue
+                memos = [
+                    block.get("text", "") for block in doc.get("blocks", [])
+                    if block.get("type") == "memo"
+                ]
+                if memos:
+                    lines.append(doc["file"])
+                    lines.extend(f"  - {memo}" for memo in memos)
         except Exception as exc:                       # noqa: BLE001
-            lines.append(f"{os.path.basename(p)}: [실패] {exc}")
-            continue
-        if memos:
-            lines.append(os.path.basename(p))
-            lines.extend(f"  - {m}" for m in memos)
-    return "\n".join(lines) if lines else "메모가 없습니다."
+            lines.append(f"{os.path.basename(item)}: [실패] {exc}")
+    return _clip("\n".join(lines)) if lines else "메모가 없습니다."
+
+
+@mcp.tool()
+def hwp_revisions(path: str) -> str:
+    """HWP/HWPX/ZIP에서 변경추적 추가·삭제 항목만 반환한다."""
+    lines = []
+    for item in _paths(path):
+        try:
+            for doc in _docs(item):
+                if doc.get("error"):
+                    lines.append(f"{doc['file']}: [실패] {doc['error']}")
+                    continue
+                revisions = [
+                    block for block in doc.get("blocks", [])
+                    if block.get("type") == "revision"
+                ]
+                if revisions:
+                    lines.append(doc["file"])
+                    for block in revisions:
+                        label = "추가" if block.get("kind") == "insert" else "삭제"
+                        lines.append(f"  - [{label}] {block.get('text', '')}")
+        except Exception as exc:                       # noqa: BLE001
+            lines.append(f"{os.path.basename(item)}: [실패] {exc}")
+    return _clip("\n".join(lines)) if lines else "변경추적 항목이 없습니다."
 
 
 def _serve(transport, host, port):
     if transport == "stdio":
         mcp.run()
         return
-    try:                                               # SDK 2.x는 실행 인자로 받는다
+    try:
         mcp.run("streamable-http", host=host, port=port)
     except TypeError:                                  # pragma: no cover
-        settings = getattr(mcp, "settings", None)      # SDK 1.x는 설정 객체로 받는다
+        settings = getattr(mcp, "settings", None)
         if settings is None:
             raise
         settings.host, settings.port = host, port
@@ -127,19 +157,15 @@ def _serve(transport, host, port):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         prog="ai-hwp-reader-mcp",
-        description="한글 문서(HWP/HWPX) 읽기 도구를 MCP로 노출한다",
+        description="한글 문서(HWP/HWPX/ZIP) 읽기 도구를 MCP로 노출한다",
     )
-    ap.add_argument("--transport", default="stdio", choices=["stdio", "http"],
-                    help="stdio(기본)는 로컬 클라이언트, http는 원격 커넥터용")
-    ap.add_argument("--host", default="127.0.0.1",
-                    help="--transport http일 때 바인딩 주소 (기본 127.0.0.1)")
-    ap.add_argument("--port", type=int, default=8000,
-                    help="--transport http일 때 포트 (기본 8000)")
-    ap.add_argument("--version", action="version",
-                    version=f"ai-hwp-reader-mcp {__version__}")
-    args = ap.parse_args(argv)
+    parser.add_argument("--transport", default="stdio", choices=["stdio", "http"])
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--version", action="version", version=f"ai-hwp-reader-mcp {__version__}")
+    args = parser.parse_args(argv)
     _serve(args.transport, args.host, args.port)
 
 

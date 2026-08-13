@@ -3,7 +3,7 @@
 ## 이제 당신의 AI가 HWP를 읽고, 그 문서로 일을 합니다.
 
 **아래아한글(HWP/HWPX)을 PDF로 바꾸지 마세요. 그냥 AI에게 주세요.**  
-AI HWP Reader는 한글 문서의 본문뿐 아니라 **병합 표, 여러 단의 표 헤더, 빈 행의 위치, 표 안의 표, 숨은 메모, 변경 내용 추적**을 구조대로 꺼내 ChatGPT · Claude · Gemini가 그 문서를 근거로 일하게 합니다.
+AI HWP Reader는 한글 문서의 본문뿐 아니라 **병합 표, 여러 단의 표 헤더, 빈 행의 위치, 표 안의 표, 숨은 메모, 변경 내용 추적, 각주·미주, 링크, 수식 스크립트, 이미지 참조**를 구조대로 꺼내 ChatGPT · Claude · Gemini가 그 문서를 근거로 일하게 합니다.
 
 [![PyPI](https://img.shields.io/pypi/v/ai-hwp-reader)](https://pypi.org/project/ai-hwp-reader/)
 [![Python](https://img.shields.io/pypi/pyversions/ai-hwp-reader)](https://pypi.org/project/ai-hwp-reader/)
@@ -49,7 +49,7 @@ HWP/HWPX
    ↓
 AI HWP Reader
    ↓
-본문 + 표 구조 + 중첩 표 + 메모 + 변경추적
+본문 + 표 구조 + 중첩 표 + 메모 + 변경추적 + 각주·링크·수식·이미지 참조
    ↓
 AI의 요약 · 검토 · 비교 · 계산 · 질의응답
 ```
@@ -99,6 +99,12 @@ AI HWP Reader는 저장된 셀 주소와 병합 범위를 사용해 구조를 �
 | **표 안의 표** | ✅ | 부모 셀 위치 + 재귀적 중첩 표 구조 |
 | 숨은 메모(주석) | ✅ | `[메모]`로 본문과 분리 |
 | **HWP 변경 내용 추적** | ✅ | 추가/삭제 range를 최종 본문과 분리 |
+| **각주·미주** | ✅ | 본문과 별도 의미 블록으로 보존 |
+| **하이퍼링크** | ✅ | 표시 텍스트와 URL을 구분 |
+| **한컴 수식 스크립트** | ✅ | 수식 원본 스크립트를 보존 |
+| **이미지 참조** | ✅ | 바이너리/OCR 없이 문서 내부 참조를 보존 |
+| **글상자 텍스트** | ✅ | 본문과 구분해 보존 |
+| **배포용 HWP ViewText** | ✅ | 암호화된 배포용 본문을 로컬에서 복호화 |
 | 여러 섹션 | ✅ | `Section2` / `Section10`을 숫자 순서로 처리 |
 | 확장자가 잘못 붙은 HWP/HWPX | ✅ | 실제 컨테이너를 보고 판별 |
 | HWP/HWPX가 여러 개 든 ZIP | ✅ | 압축을 디스크에 풀지 않고 파일별 처리 |
@@ -213,7 +219,7 @@ AI는 그 결과조차 자연스럽게 설명할 수 있기 때문입니다.
 
 그래서 AI HWP Reader는 모호하거나 손상된 구조를 가능한 범위에서 **fail-closed**로 다룹니다.
 
-이번 0.4 계열에서는 특히 다음 경계를 더 엄격하게 검사합니다.
+0.5 계열에서는 특히 다음 경계를 더 엄격하게 검사합니다.
 
 - HWP `PARA_TEXT`의 UTF-16LE 바이트 경계와 8-word 제어문자
 - 깨진 압축 스트림을 raw 본문으로 오인하지 않기
@@ -223,6 +229,10 @@ AI는 그 결과조차 자연스럽게 설명할 수 있기 때문입니다.
 - HWPX의 잘못된 정수 속성과 불완전한 셀 주소
 - CFB/OLE v3·v4의 sector 크기·byte order·FAT/DIFAT/mini FAT 체인
 - 잘린 레코드와 손상 XML
+- HWP DEFLATE 스트림의 압축 해제 출력 크기 상한
+- HWPX XML 깊이·노드·크기와 DTD/ENTITY 차단
+- ZIP 누적 크기·멤버 수·비정상 압축률·정규화 경로 중복/상위경로
+- 병합 셀의 실제 점유 범위 겹침
 - Markdown 셀의 `|` / 백슬래시
 - 생성된 `SKILL.md`와 단일 파일이 정본 소스와 일치하는지
 
@@ -256,7 +266,7 @@ documents = read_documents("보고자료.zip")
 print(render_documents(documents, "md"))
 ```
 
-반환 블록은 문서 순서대로 `text`, `table`, `memo`, `revision`입니다.
+반환 블록은 문서 순서대로 `text`, `table`, `memo`, `revision`, `note`, `link`, `equation`, `image`, `textbox` 등을 포함합니다.
 
 ```python
 {
@@ -328,7 +338,12 @@ skill/hwp_reader_single.py     외부 의존성 없는 단일 파일 배포본
 hwp_reader/parser.py           공개 파서 진입점
 hwp_reader/_parser_core.py     HWP 5.0 / HWPX 파서 코어
 hwp_reader/_parser_hardening.py 정확성 검증 레이어
+hwp_reader/_parser_features.py  0.5 번호·문서정보 의미 복원
+hwp_reader/_parser_controls_text.py 0.5 HWP 컨트롤 의미 복원
+hwp_reader/_reader_v05.py       0.5 HWP/HWPX 확장 읽기 계층
+hwp_reader/_viewtext.py         배포용 HWP ViewText 복호화
 hwp_reader/_ole.py             표준 라이브러리 CFB/OLE 리더
+hwp_reader/_ole_compat.py      제한적 비표준 CFB 호환 리더
 hwp_reader/cli.py              CLI
 hwp_reader/mcp_server.py       선택형 MCP 서버
 tools/build_single.py          단일 파일 + SKILL.md 생성 정본
@@ -354,4 +369,4 @@ tests/                         synthetic fixture 기반 회귀시험
 
 MIT
 
-한글과컴퓨터가 공개한 HWP 5.0 / OWPML 문서 형식을 근거로 구현했습니다.
+한글과컴퓨터가 공개한 HWP 5.0 / OWPML 문서 형식을 근거로 구현했습니다. 오픈소스 구현과의 교차검증 및 고지는 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)에 정리했습니다.

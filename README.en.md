@@ -2,7 +2,7 @@
 
 ## Your AI can now read HWP — and work with the document.
 
-Give **ChatGPT, Claude or Gemini** the original Korean HWP/HWPX file. AI HWP Reader recovers the parts that matter for real work: **merged tables, tables inside tables, hidden comments, and tracked changes**.
+Give **ChatGPT, Claude or Gemini** the original Korean HWP/HWPX file. AI HWP Reader recovers the parts that matter for real work: **merged tables, tables inside tables, hidden comments, tracked changes, footnotes/endnotes, links, equation scripts, and image references**.
 
 No Hancom Office · zero runtime dependencies for the core parser · read-only
 
@@ -55,6 +55,12 @@ It also preserves information that is easy to miss:
 | **Nested tables (table inside a cell)** | ✅ |
 | Hidden comments / memos | ✅ |
 | **HWP tracked insertions and deletions** | ✅ |
+| **Footnotes / endnotes** | ✅ |
+| **Hyperlinks** | ✅ |
+| **Hancom equation scripts** | ✅ preserves source script |
+| **Image references** | ✅ reference only, no OCR/binary extraction |
+| **Text boxes** | ✅ |
+| **Distribution HWP ViewText** | ✅ local decryption |
 | Multiple sections in numeric order | ✅ |
 | Wrong `.hwp` / `.hwpx` filename extension | ✅ content detection |
 | **ZIP containing multiple HWP/HWPX files** | ✅ recursive member discovery |
@@ -124,7 +130,7 @@ documents = read_documents("bundle.zip")
 print(render_documents(documents, "md"))
 ```
 
-Block types include `text`, `table`, `memo`, and `revision`. Tables expose their grid, cell coordinates, spans, and nested tables.
+Block types include `text`, `table`, `memo`, `revision`, `note`, `link`, `equation`, `image`, and `textbox`. Tables expose their grid, cell coordinates, spans, and nested tables.
 
 ### CLI
 
@@ -150,7 +156,7 @@ The MCP tools are read-only as well.
 
 A parser that crashes is obvious. A parser that returns plausible-but-wrong values is more dangerous for AI workflows.
 
-Regression tests therefore focus on silent-failure cases: cell coordinate offsets, row/column spans, multi-row headers, HWP control widths, surrogate pairs, section ordering, cells without explicit HWPX addresses, nested tables, hidden comments, tracked-change ranges, Markdown escaping, malformed records/XML, oversized table allocation, ZIP traversal, and generated `SKILL.md` synchronization.
+Regression tests therefore focus on silent-failure cases: cell coordinate offsets, row/column spans, multi-row headers, HWP control widths, surrogate pairs, section ordering, cells without explicit HWPX addresses, nested tables, hidden comments, tracked-change ranges, distribution ViewText, bounded DEFLATE output, XML DTD/entity rejection, ZIP limits/path normalization, Markdown escaping, malformed records/XML, oversized table allocation, and generated `SKILL.md` synchronization.
 
 CI covers Python 3.9–3.13 on Linux, macOS, and Windows.
 
@@ -165,4 +171,4 @@ CI covers Python 3.9–3.13 on Linux, macOS, and Windows.
 
 MIT
 
-Implemented from the published HWP 5.0 / OWPML document formats.
+Implemented from the published HWP 5.0 / OWPML document formats. Open-source cross-checks and license notices are documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

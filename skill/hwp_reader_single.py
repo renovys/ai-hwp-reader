@@ -1,4 +1,4 @@
-# AI HWP Reader v0.4.0 | source-sha256:a66b7235ef545f46 | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader
+# AI HWP Reader v0.5.0 | source-sha256:db98b00fe5def4b9 | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader
 
 """표준 라이브러리만으로 읽는 OLE Compound File Binary 컨테이너.
 
@@ -1408,14 +1408,1181 @@ def install(module):
 
 install(sys.modules[__name__])
 
+"""일부 한컴 생성 CFB의 비표준 할당표를 제한적으로 읽는 호환 리더.
+
+정상 입력은 항상 `_ole.OleFile`이 먼저 처리한다. 이 클래스는 strict 리더가
+거부한 뒤에만 사용하며, 시그니처·섹터 크기·범위·DIFAT 순환·stream 크기 같은
+안전 불변식은 그대로 유지하고 FAT 표식/중복처럼 실제 문서에서 관찰되는
+할당표 비정합만 완화한다.
+
+동작 설계 교차검증: edwardkim/rhwp LenientCfbReader (MIT).
+"""
+
+import struct
+
+
+
+
+class CompatOleFile(OleFile):
+    """strict CFB 실패 후에만 쓰는 제한적 호환 리더."""
+
+    def __init__(self, path_or_bytes):
+        self.compat_warnings = []
+        super().__init__(path_or_bytes)
+
+    def _read_fat(self):
+        """DIFAT의 중복 FAT SID와 잘못된 자체 표식만 제한적으로 허용한다."""
+        raw_ids = [sid for sid in self._header_difat if sid != FREESECT]
+        next_difat = self._first_difat_sector
+        seen_difat = set()
+        entries_per_sector = self.sector_size // 4
+
+        while len(raw_ids) < self._num_fat_sectors:
+            if self._num_difat_sectors == 0 or next_difat in (FREESECT, ENDOFCHAIN):
+                break
+            if next_difat in seen_difat:
+                self._bad("호환 모드에서도 DIFAT 체인 순환은 허용하지 않는다")
+            if len(seen_difat) >= self._num_difat_sectors:
+                self._bad("DIFAT 섹터 수가 헤더와 다르다")
+            seen_difat.add(next_difat)
+            block = self._read_sector(next_difat)
+            values = struct.unpack("<{}I".format(entries_per_sector), block)
+            raw_ids.extend(sid for sid in values[:-1] if sid != FREESECT)
+            next_difat = values[-1]
+
+        unique = []
+        seen = set()
+        for sid in raw_ids[:self._num_fat_sectors]:
+            if sid in (FREESECT, ENDOFCHAIN, FATSECT, DIFSECT, NOSTREAM):
+                continue
+            if not isinstance(sid, int) or sid < 0 or sid >= self._sector_count:
+                self._bad("호환 FAT 섹터 번호가 파일 범위를 벗어났다")
+            if sid in seen:
+                self.compat_warnings.append("DIFAT의 중복 FAT 섹터 참조를 한 번만 사용했다")
+                continue
+            seen.add(sid)
+            unique.append(sid)
+
+        if not unique:
+            self._bad("호환 모드에서도 읽을 FAT 섹터가 없다")
+        if len(unique) > self._sector_count:
+            self._bad("호환 FAT 섹터 수가 전체 섹터 수를 넘는다")
+
+        fat = []
+        for sid in unique:
+            fat.extend(struct.unpack(
+                "<{}I".format(entries_per_sector), self._read_sector(sid)
+            ))
+
+        for sid in unique:
+            if sid >= len(fat):
+                self._bad("FAT 테이블이 FAT 섹터 자체를 포함하지 못한다")
+            if fat[sid] != FATSECT:
+                self.compat_warnings.append("FAT 섹터의 FATSECT 표식 불일치를 허용했다")
+        for sid in seen_difat:
+            if sid >= len(fat):
+                self._bad("FAT 테이블이 DIFAT 섹터 자체를 포함하지 못한다")
+            if fat[sid] != DIFSECT:
+                self.compat_warnings.append("DIFAT 섹터의 DIFSECT 표식 불일치를 허용했다")
+        return fat
+
+    def _chain(self, start, table, needed=None, what="FAT"):
+        """선언 stream 크기 이후의 불필요한 FAT 꼬리만 잘라낸다.
+
+        필요한 구간 내부의 순환·예약값·범위 오류는 strict와 동일하게 실패한다.
+        """
+        if needed == 0:
+            return []
+        if start in (FREESECT, ENDOFCHAIN, NOSTREAM):
+            self._bad(f"{what} 체인의 시작 섹터가 없다")
+        if needed is not None and needed > len(table):
+            self._bad(f"{what} 체인이 가질 수 있는 섹터 수를 넘는다")
+
+        out = []
+        seen = set()
+        sector = start
+        while True:
+            if sector in seen:
+                self._bad(f"{what} 체인이 순환한다")
+            if not isinstance(sector, int) or sector < 0 or sector >= len(table):
+                self._bad(f"{what} 체인의 섹터 번호가 범위를 벗어났다")
+            seen.add(sector)
+            out.append(sector)
+            next_sector = table[sector]
+
+            if needed is not None and len(out) >= needed:
+                if next_sector != ENDOFCHAIN:
+                    self.compat_warnings.append(f"{what} 체인의 선언 크기 이후 꼬리를 무시했다")
+                return out
+            if next_sector == ENDOFCHAIN:
+                if needed is None:
+                    return out
+                self._bad(f"{what} 체인이 예상보다 짧다")
+            if next_sector in (FREESECT, FATSECT, DIFSECT, NOSTREAM):
+                self._bad(f"{what} 체인이 예약된 섹터를 가리킨다")
+            sector = next_sector
+
+StrictOleFile = OleFile
+
+"""strict CFB 우선, 알려진 비표준 할당표에만 호환 재시도를 적용한다."""
+
+from contextvars import ContextVar
+
+
+
+
+_COMPAT = ContextVar("ai_hwp_reader_compat_cfb", default=None)
+
+
+def current_compat_warnings():
+    """현재 읽기 호출에서 호환 CFB가 쓰였다면 경고 목록을 반환한다."""
+    return _COMPAT.get()
+
+
+class FallbackOleFile:
+    """정상 문서는 strict 경로 하나만 타는 OLE 팩토리."""
+
+    def __new__(cls, source):
+        _COMPAT.set(None)
+        try:
+            ole = StrictOleFile(source)
+            ole.compat_mode = False
+            ole.compat_warnings = []
+            return ole
+        except ValueError as strict_error:
+            try:
+                ole = CompatOleFile(source)
+            except ValueError:
+                raise strict_error
+            ole.compat_mode = True
+            ole.strict_error = str(strict_error)
+            warnings = tuple(ole.compat_warnings) or ("비표준 CFB 할당표를 호환 모드로 읽었다",)
+            _COMPAT.set(warnings)
+            return ole
+
+"""0.5 계열 실문서 의미 복원 계층.
+
+정상 HWP/HWPX의 기존 fast path를 유지하면서 문단 번호·글머리표, 각주·미주,
+하이퍼링크, 수식 스크립트, 글상자·이미지 참조처럼 AI가 문서 의미를 이해하는 데
+필요한 구조를 추가로 보존한다.
+
+포맷/동작 교차검증: edwardkim/rhwp, chrisryugj/kordoc (MIT).
+"""
+
+MAX_HWP_RECORDS = 500_000
+MAX_HWP_STREAM_BYTES = 256 * 1024 * 1024
+MAX_HWP_TOTAL_BYTES = 512 * 1024 * 1024
+MAX_HWPX_SECTION_BYTES = 64 * 1024 * 1024
+MAX_HWPX_TOTAL_XML_BYTES = 256 * 1024 * 1024
+MAX_FEATURE_DEPTH = 8
+MAX_HYPERLINK_LENGTH = 2_000
+
+TAG_BIN_DATA = 0x12
+TAG_NUMBERING = 0x17
+TAG_BULLET = 0x18
+TAG_DOC_PARA_SHAPE = 0x19
+TAG_EQEDIT = 0x58
+TAG_SHAPE_COMPONENT = 0x4C
+TAG_SHAPE_COMPONENT_PICTURE = 0x55
+
+
+def _cid(text):
+    return int.from_bytes(text.encode("ascii"), "big")
+
+
+CTRL_TBL = _cid("tbl ")
+CTRL_GSO = _cid("gso ")
+CTRL_EQED = _cid("eqed")
+CTRL_HEAD = _cid("head")
+CTRL_FOOT = _cid("foot")
+CTRL_FN = _cid("fn  ")
+CTRL_EN = _cid("en  ")
+CTRL_ATNO = _cid("atno")
+CTRL_NWNO = _cid("nwno")
+CTRL_SECD = _cid("secd")
+CTRL_OLE = _cid("ole ")
+FIELD_HLK = _cid("%hlk")
+
+KNOWN_CTRL_IDS = {
+    CTRL_TBL, CTRL_GSO, CTRL_EQED, CTRL_HEAD, CTRL_FOOT,
+    CTRL_FN, CTRL_EN, CTRL_ATNO, CTRL_NWNO, CTRL_SECD, CTRL_OLE,
+}
+
+
+def _swap32(value):
+    return int.from_bytes(value.to_bytes(4, "little"), "big")
+
+
+def _is_field_id(value):
+    return ((value >> 24) & 0xFF) == 0x25
+
+
+def _normalize_ctrl_id(value):
+    if value in KNOWN_CTRL_IDS or _is_field_id(value):
+        return value
+    swapped = _swap32(value)
+    if swapped in KNOWN_CTRL_IDS or _is_field_id(swapped):
+        return swapped
+    return value
+
+
+def _records_limited(module, data):
+    out = []
+    pos, end = 0, len(data)
+    while pos < end:
+        if len(out) >= MAX_HWP_RECORDS:
+            raise ValueError(f"손상된 HWP 레코드: {MAX_HWP_RECORDS}개 상한을 넘는다")
+        if pos + 4 > end:
+            raise ValueError("손상된 HWP 레코드: 헤더가 4바이트보다 짧다")
+        header = module.struct.unpack_from("<I", data, pos)[0]
+        tag = header & 0x3FF
+        level = (header >> 10) & 0x3FF
+        size = (header >> 20) & 0xFFF
+        pos += 4
+        if size == 0xFFF:
+            if pos + 4 > end:
+                raise ValueError("손상된 HWP 레코드: 확장 크기가 잘렸다")
+            size = module.struct.unpack_from("<I", data, pos)[0]
+            pos += 4
+        if size > end - pos:
+            raise ValueError("손상된 HWP 레코드: payload가 섹션 끝을 넘는다")
+        out.append((tag, level, data[pos:pos + size]))
+        pos += size
+    return out
+
+
+def _inflate_raw_limited(module, raw, max_bytes, what):
+    dec = module.zlib.decompressobj(-15)
+    try:
+        out = dec.decompress(raw, max_bytes + 1)
+    except module.zlib.error as exc:
+        raise ValueError(f"{what}: HWP 압축 스트림이 손상됐다") from exc
+    if len(out) > max_bytes or dec.unconsumed_tail:
+        raise ValueError(f"{what}: 압축 해제 결과가 {max_bytes}바이트 상한을 넘는다")
+    try:
+        out += dec.flush(max_bytes + 1 - len(out))
+    except module.zlib.error as exc:
+        raise ValueError(f"{what}: HWP 압축 스트림이 손상됐다") from exc
+    if len(out) > max_bytes:
+        raise ValueError(f"{what}: 압축 해제 결과가 {max_bytes}바이트 상한을 넘는다")
+    if not dec.eof:
+        raise ValueError(f"{what}: HWP 압축 스트림이 끝나기 전에 잘렸다")
+    return out
+
+
+def _hwp_string(module, data, offset):
+    if offset + 2 > len(data):
+        return "", len(data)
+    length = module.struct.unpack_from("<H", data, offset)[0]
+    start = offset + 2
+    end = start + length * 2
+    if end > len(data):
+        raise ValueError("손상된 DocInfo: UTF-16 문자열이 레코드 끝을 넘는다")
+    if not length:
+        return "", start
+    return module._decode_utf16(data[start:end], "HWP DocInfo"), end
+
+
+def _parse_docinfo(module, ole, compressed):
+    info = {"para_shapes": [], "numberings": [], "bullets": [], "bin_data": []}
+    if not ole.exists("DocInfo"):
+        return info
+    records = module._records(module._read_stream(ole, "DocInfo", compressed))
+    for tag, _level, data in records:
+        if tag == TAG_DOC_PARA_SHAPE and len(data) >= 4:
+            attr = module.struct.unpack_from("<I", data, 0)[0]
+            info["para_shapes"].append({
+                "head_type": (attr >> 23) & 0x03,
+                "level": (attr >> 25) & 0x07,
+                "numbering_id": module.struct.unpack_from("<H", data, 30)[0]
+                if len(data) >= 32 else 0,
+            })
+        elif tag == TAG_BIN_DATA and len(data) >= 2:
+            attr = module.struct.unpack_from("<H", data, 0)[0]
+            kind = attr & 0x000F
+            if kind == 0:
+                info["bin_data"].append({"kind": "link", "storage_id": 0, "extension": ""})
+            else:
+                storage_id = module.struct.unpack_from("<H", data, 2)[0] if len(data) >= 4 else 0
+                extension, _ = _hwp_string(module, data, 4)
+                info["bin_data"].append({
+                    "kind": "storage" if kind == 2 else "embed",
+                    "storage_id": storage_id,
+                    "extension": extension.strip(".\0"),
+                })
+        elif tag == TAG_NUMBERING and len(data) >= 14:
+            formats, number_formats = [], []
+            starts = [1] * 7
+            offset = 0
+            for _ in range(7):
+                if offset + 12 > len(data):
+                    formats.append("")
+                    number_formats.append(0)
+                    continue
+                attr = module.struct.unpack_from("<I", data, offset)[0]
+                number_formats.append((attr >> 5) & 0x0F)
+                offset += 12
+                value, offset = _hwp_string(module, data, offset)
+                formats.append(value)
+            base_start = 1
+            if offset + 2 <= len(data):
+                base_start = module.struct.unpack_from("<H", data, offset)[0] or 1
+                offset += 2
+            for level in range(7):
+                if offset + 4 <= len(data):
+                    starts[level] = module.struct.unpack_from("<I", data, offset)[0] or 1
+                    offset += 4
+                else:
+                    starts[level] = base_start
+            info["numberings"].append({
+                "formats": formats, "number_formats": number_formats, "starts": starts,
+            })
+        elif tag == TAG_BULLET and len(data) >= 14:
+            code = module.struct.unpack_from("<H", data, 12)[0]
+            info["bullets"].append(chr(code) if code and code != 0xFFFF else "•")
+    return info
+
+
+class _NumberingState:
+    def __init__(self):
+        self.current = 0
+        self.counters = [0] * 7
+        self.history = {}
+
+    def advance(self, numbering_id, level):
+        level = min(max(level, 0), 6)
+        if self.current != numbering_id:
+            if self.current:
+                self.history[self.current] = self.counters[:]
+            if numbering_id in self.history:
+                self.counters = self.history[numbering_id][:]
+            else:
+                old = self.counters
+                self.counters = [0] * 7
+                for i in range(level):
+                    self.counters[i] = old[i]
+            self.current = numbering_id
+        self.counters[level] += 1
+        for i in range(level + 1, 7):
+            self.counters[i] = 0
+        return self.counters[:]
+
+
+def _roman(number):
+    if number <= 0 or number > 3999:
+        return str(number)
+    pairs = ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+             (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+             (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"))
+    out = []
+    for value, glyph in pairs:
+        while number >= value:
+            number -= value
+            out.append(glyph)
+    return "".join(out)
+
+
+def _latin(number, upper=True):
+    if number <= 0:
+        return str(number)
+    out = ""
+    base = 65 if upper else 97
+    while number:
+        number -= 1
+        out = chr(base + number % 26) + out
+        number //= 26
+    return out
+
+
+def _east_asian(number, digits, units, zero):
+    if number == 0:
+        return zero
+    if number < 0 or number > 99999:
+        return str(number)
+    result, unit = "", 0
+    while number:
+        digit = number % 10
+        if digit:
+            d = "" if digit == 1 and unit else digits[digit]
+            result = d + units[unit] + result
+        number //= 10
+        unit += 1
+    return result
+
+
+def _format_number(number, code, auto=False):
+    if code == 1:
+        return chr(0x2460 + number - 1) if 1 <= number <= 20 else str(number)
+    if code == 2:
+        return _roman(number)
+    if code == 3:
+        return _roman(number).lower()
+    if code == 4:
+        return _latin(number, True)
+    if code == 5:
+        return _latin(number, False)
+    ganada_code = 6 if auto else 8
+    hangul_code = 7 if auto else 12
+    hanja_code = 8 if auto else 13
+    if code == ganada_code:
+        table = "가나다라마바사아자차카타파하"
+        return table[number - 1] if 1 <= number <= len(table) else str(number)
+    if not auto and code == 10:
+        table = "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ"
+        return table[number - 1] if 1 <= number <= len(table) else str(number)
+    if code == hangul_code:
+        return _east_asian(number,
+                           ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"],
+                           ["", "십", "백", "천", "만"], "영")
+    if code == hanja_code:
+        return _east_asian(number,
+                           ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"],
+                           ["", "十", "百", "千", "萬"], "零")
+    return str(number)
+
+
+def _expand_numbering(fmt, counters, numbering):
+    out, i = [], 0
+    while i < len(fmt):
+        if fmt[i] == "^" and i + 1 < len(fmt) and fmt[i + 1] in "1234567":
+            idx = int(fmt[i + 1]) - 1
+            count = counters[idx] if idx < len(counters) else 0
+            start = numbering["starts"][idx] if idx < len(numbering["starts"]) else 1
+            number = start - 1 + count if count else start
+            code = numbering["number_formats"][idx] if idx < len(numbering["number_formats"]) else 0
+            out.append(_format_number(number, code))
+            i += 2
+        else:
+            out.append(fmt[i])
+            i += 1
+    return "".join(out)
+
+
+__all__ = [
+    "MAX_HWP_RECORDS", "MAX_HWP_STREAM_BYTES", "MAX_HWP_TOTAL_BYTES",
+    "MAX_HWPX_SECTION_BYTES", "MAX_HWPX_TOTAL_XML_BYTES", "MAX_FEATURE_DEPTH",
+    "MAX_HYPERLINK_LENGTH", "TAG_BIN_DATA", "TAG_NUMBERING", "TAG_BULLET",
+    "TAG_DOC_PARA_SHAPE", "TAG_EQEDIT", "TAG_SHAPE_COMPONENT",
+    "TAG_SHAPE_COMPONENT_PICTURE", "CTRL_TBL", "CTRL_GSO", "CTRL_EQED",
+    "CTRL_HEAD", "CTRL_FOOT", "CTRL_FN", "CTRL_EN", "CTRL_ATNO",
+    "CTRL_NWNO", "CTRL_SECD", "CTRL_OLE", "FIELD_HLK",
+    "_normalize_ctrl_id", "_records_limited", "_parse_docinfo",
+    "_NumberingState", "_format_number", "_expand_numbering",
+]
+
+"""HWP 0.5 문단·컨트롤 의미 복원."""
+
+
+_EXTENDED = set(range(1, 4)) | set(range(11, 13)) | set(range(14, 19)) | set(range(21, 24))
+_INLINE = set(range(4, 10)) | set(range(19, 21))
+
+
+def _field_url(command):
+    out, escaped = [], False
+    for ch in command:
+        if escaped: out.append(ch); escaped = False
+        elif ch == "\\": escaped = True
+        elif ch == ";": break
+        else: out.append(ch)
+    value = "".join(out).strip()
+    return value if value and len(value) <= MAX_HYPERLINK_LENGTH and value.lower().startswith(("http://", "https://", "mailto:", "#")) else ""
+
+
+def _field_command(module, data):
+    if len(data) < 11: return ""
+    length = module.struct.unpack_from("<H", data, 9)[0]
+    end = 11 + length * 2
+    return module._decode_utf16(data[11:end], "HWP 하이퍼링크 필드").rstrip("\0") if length and end <= len(data) else ""
+
+
+def _child_end(records, index, end):
+    level = records[index][1]; pos = index + 1
+    while pos < end and records[pos][1] > level: pos += 1
+    return pos
+
+
+def _child_text(module, records, start, end):
+    parts = []
+    for tag, _level, data in records[start:end]:
+        if tag == module.HWPTAG_PARA_TEXT:
+            text = module._decode_text(data).strip()
+            if text: parts.append(text)
+    return " ".join(parts)
+
+
+def _child_text_without_tables(module, records, start, end):
+    """머리말/꼬리말의 표 셀 문자를 평문과 중복시키지 않는다."""
+    parts = []; pos = start
+    while pos < end:
+        tag, _level, data = records[pos]
+        if tag == module.HWPTAG_CTRL_HEADER and len(data) >= 4:
+            ctrl = _normalize_ctrl_id(module.struct.unpack_from("<I", data)[0])
+            if ctrl == CTRL_TBL:
+                pos = _child_end(records, pos, end)
+                continue
+        if tag == module.HWPTAG_PARA_TEXT:
+            text = module._decode_text(data).strip()
+            if text: parts.append(text)
+        pos += 1
+    return " ".join(parts)
+
+
+def _child_tables(module, records, start, end):
+    tables = []; pos = start
+    while pos < end:
+        tag, _level, data = records[pos]
+        if tag == module.HWPTAG_CTRL_HEADER and len(data) >= 4:
+            ctrl = _normalize_ctrl_id(module.struct.unpack_from("<I", data)[0])
+            if ctrl == CTRL_TBL:
+                finish = _child_end(records, pos, end)
+                for i in range(pos + 1, finish):
+                    if records[i][0] == module.HWPTAG_TABLE:
+                        table, _ = module._parse_table(records, i)
+                        if table.get("grid"): tables.append(table)
+                        break
+                pos = finish
+                continue
+        pos += 1
+    return tables
+
+
+def _table_identity(table):
+    return (
+        table.get("rows", 0), table.get("cols", 0),
+        tuple((c.get("row"), c.get("col"), c.get("rowspan", 1), c.get("colspan", 1), c.get("text", ""))
+              for c in table.get("cells", [])),
+    )
+
+
+def _equation(module, records, start, end):
+    for tag, _level, data in records[start:end]:
+        if tag == TAG_EQEDIT and len(data) >= 6:
+            length = module.struct.unpack_from("<H", data, 4)[0]; stop = 6 + length * 2
+            if length and stop <= len(data):
+                return module._decode_utf16(data[6:stop], "HWP 수식").replace("\0", "").strip()
+    return ""
+
+
+def _image_name(module, data, docinfo):
+    if len(data) < 73: return ""
+    ident = module.struct.unpack_from("<H", data, 71)[0]
+    if not ident: return ""
+    items = docinfo.get("bin_data", []); item = items[ident - 1] if ident <= len(items) else None
+    if item and item.get("kind") == "link": return f"외부연결:{ident}"
+    storage = (item.get("storage_id", 0) if item else ident) or ident
+    ext = (item.get("extension") or "bin") if item else "bin"
+    return f"BIN{storage:04X}.{ext}"
+
+
+def control_effect(module, records, index, end, docinfo, state):
+    data = records[index][2]; finish = _child_end(records, index, end)
+    if len(data) < 4: return {"inline": "", "blocks": [], "end": finish}
+    ctrl = _normalize_ctrl_id(module.struct.unpack_from("<I", data)[0]); blocks = []; inline = ""
+    if ctrl == CTRL_EQED:
+        value = _equation(module, records, index + 1, finish)
+        if value: inline = f"[수식: {value}]"
+    elif ctrl in (CTRL_FN, CTRL_EN):
+        kind = "각주" if ctrl == CTRL_FN else "미주"; typ = 1 if ctrl == CTRL_FN else 2
+        number = state["auto"].get(typ, 1); state["auto"][typ] = number + 1
+        value = _child_text(module, records, index + 1, finish); inline = f"[{kind} {number}]"
+        if value: blocks.append({"type": "note", "kind": kind, "number": number, "text": value})
+    elif ctrl in (CTRL_HEAD, CTRL_FOOT):
+        kind = "header" if ctrl == CTRL_HEAD else "footer"
+        value = _child_text_without_tables(module, records, index + 1, finish)
+        if value:
+            key = kind + "\0" + value
+            if key not in state["seen"]: state["seen"].add(key); blocks.append({"type": kind, "text": value})
+        for table in _child_tables(module, records, index + 1, finish):
+            key = (kind, "table", _table_identity(table))
+            if key not in state["seen"]:
+                state["seen"].add(key)
+                blocks.append({"type": "table", "context": kind, **table})
+    elif ctrl == CTRL_ATNO and len(data) >= 8:
+        attr = module.struct.unpack_from("<I", data, 4)[0]; typ = attr & 15; fmt = (attr >> 4) & 255
+        number = state["auto"].get(typ, 1); state["auto"][typ] = number + 1
+        pre = module.struct.unpack_from("<H", data, 12)[0] if len(data) >= 14 else 0
+        post = module.struct.unpack_from("<H", data, 14)[0] if len(data) >= 16 else 0
+        inline = (chr(pre) if pre else "") + _format_number(number, fmt, auto=True) + (chr(post) if post else "")
+    elif ctrl == CTRL_NWNO and len(data) >= 10:
+        attr = module.struct.unpack_from("<I", data, 4)[0]; number = module.struct.unpack_from("<H", data, 8)[0]
+        if number: state["auto"][attr & 15] = number
+    elif ctrl == CTRL_SECD and len(data) >= 20: state["outline"] = module.struct.unpack_from("<H", data, 18)[0]
+    elif ctrl == FIELD_HLK:
+        url = _field_url(_field_command(module, data))
+        if url: blocks.append({"type": "hyperlink", "url": url})
+    elif ctrl == CTRL_TBL:
+        for pos in range(index + 1, finish):
+            if records[pos][0] == module.HWPTAG_TABLE:
+                table, _ = module._parse_table(records, pos)
+                if table.get("grid"): blocks.append({"type": "table", **table})
+                break
+    elif ctrl == CTRL_GSO:
+        value = _child_text(module, records, index + 1, finish)
+        if value: blocks.append({"type": "textbox", "text": value})
+        for tag, _level, payload in records[index + 1:finish]:
+            if tag == TAG_SHAPE_COMPONENT_PICTURE:
+                name = _image_name(module, payload, docinfo)
+                if name: blocks.append({"type": "image", "name": name})
+    return {"inline": inline, "blocks": blocks, "end": finish}
+
+
+def decode_para(module, payloads, controls):
+    out, ctrl_index = [], 0
+    for data in payloads:
+        if len(data) % 2: raise ValueError("손상된 HWP PARA_TEXT: UTF-16LE 바이트 수가 홀수다")
+        pos, units = 0, len(data) // 2
+        while pos < units:
+            code = module.struct.unpack_from("<H", data, pos * 2)[0]
+            if code >= 32:
+                start = pos
+                while pos < units and module.struct.unpack_from("<H", data, pos * 2)[0] >= 32: pos += 1
+                out.append(module._decode_utf16(data[start * 2:pos * 2], "HWP PARA_TEXT")); continue
+            if code in _EXTENDED or code in _INLINE:
+                if pos + 8 > units: raise ValueError("손상된 HWP PARA_TEXT: 8워드 제어문자가 잘렸다")
+                if code in _EXTENDED:
+                    if ctrl_index < len(controls) and controls[ctrl_index].get("inline"): out.append(controls[ctrl_index]["inline"])
+                    ctrl_index += 1
+                elif code == 9: out.append("\t")
+                pos += 8; continue
+            if code in (0, 10): out.append("\n")
+            elif code == 24: out.append("-")
+            elif code == 30: out.append("\u00a0")
+            elif code == 31: out.append(" ")
+            pos += 1
+    return "".join(out).replace("\x7f", " ").strip()
+
+
+def paragraph_prefix(module, header, docinfo, state):
+    data = header[2]
+    if len(data) < 10: return ""
+    shape_id = module.struct.unpack_from("<H", data, 8)[0]; shapes = docinfo.get("para_shapes", [])
+    if shape_id >= len(shapes): return ""
+    shape = shapes[shape_id]; typ = shape.get("head_type", 0); level = min(shape.get("level", 0), 6); ident = shape.get("numbering_id", 0)
+    if typ in (1, 2):
+        if typ == 1 and not ident: ident = state.get("outline", 0)
+        defs = docinfo.get("numberings", [])
+        if not ident or ident > len(defs): return ""
+        definition = defs[ident - 1]; counters = state["numbering"].advance(ident, level)
+        fmt = definition["formats"][level] if level < len(definition["formats"]) else ""
+        return _expand_numbering(fmt, counters, definition).strip()
+    if typ == 3:
+        bullets = docinfo.get("bullets", [])
+        if ident and ident <= len(bullets): return bullets[ident - 1]
+    return ""
+
+"""HWP 배포용 ViewText 읽기 지원. 표준 라이브러리만 사용한다.
+
+알고리즘은 HWP 5 배포용 문서 규격과 rhwp/kordoc(MIT), FIPS-197을 교차검증했다.
+"""
+import struct
+import zlib
+
+TAG_DISTRIBUTE_DOC_DATA = 0x1C
+S = bytes.fromhex("637c777bf26b6fc53001672bfed7ab76ca82c97dfa5947f0add4a2af9ca472c0b7fd9326363ff7cc34a5e5f171d8311504c723c31896059a071280e2eb27b27509832c1a1b6e5aa0523bd6b329e32f8453d100ed20fcb15b6acbbe394a4c58cfd0efaafb434d338545f9027f503c9fa851a3408f929d38f5bcb6da2110fff3d2cd0c13ec5f974417c4a77e3d645d197360814fdc222a908846eeb814de5e0bdbe0323a0a4906245cc2d3ac629195e479e7c8376d8dd54ea96c56f4ea657aae08ba78252e1ca6b4c6e8dd741f4bbd8b8a703eb5664803f60e613557b986c11d9ee1f8981169d98e949b1e87e9ce5528df8ca1890dbfe6426841992d0fb054bb16")
+IS = bytes.fromhex("52096ad53036a538bf40a39e81f3d7fb7ce339829b2fff87348e4344c4dee9cb547b9432a6c2233dee4c950b42fac34e082ea16628d924b2765ba2496d8bd12572f8f66486689816d4a45ccc5d65b6926c704850fdedb9da5e154657a78d9d8490d8ab008cbcd30af7e45805b8b34506d02c1e8fca3f0f02c1afbd0301138a6b3a9111414f67dcea97f2cfcef0b4e67396ac7422e7ad3585e2f937e81c75df6e47f11a711d29c5896fb7620eaa18be1bfc563e4bc6d279209adbc0fe78cd5af41fdda8338807c731b11210592780ec5f60517fa919b54a0d2de57a9f93c99cefa0e03b4dae2af5b0c8ebbb3c83539961172b047eba77d626e169146355210c7d")
+RCON = (1, 2, 4, 8, 16, 32, 64, 128, 27, 54)
+
+class ViewTextError(ValueError):
+    pass
+
+class _Lcg:
+    def __init__(self, seed):
+        self.seed = seed & 0xFFFFFFFF
+    def rand(self):
+        self.seed = (self.seed * 214013 + 2531011) & 0xFFFFFFFF
+        return (self.seed >> 16) & 0x7FFF
+
+def _unscramble(payload):
+    if len(payload) < 256:
+        raise ViewTextError("DISTRIBUTE_DOC_DATA가 256바이트보다 짧다")
+    out = bytearray(payload[:256])
+    random = _Lcg(struct.unpack_from("<I", out)[0])
+    left = 0
+    key = 0
+    for index in range(256):
+        if not left:
+            key = random.rand() & 0xFF
+            left = (random.rand() & 15) + 1
+        if index >= 4:
+            out[index] ^= key
+        left -= 1
+    return bytes(out)
+
+def _mul(a, b):
+    result = 0
+    for _ in range(8):
+        if b & 1:
+            result ^= a
+        a = ((a << 1) ^ 0x11B) if a & 0x80 else a << 1
+        a &= 0xFF
+        b >>= 1
+    return result
+
+def _round_keys(key):
+    if len(key) != 16:
+        raise ViewTextError("AES-128 키 길이가 16바이트가 아니다")
+    words = [list(key[offset:offset + 4]) for offset in range(0, 16, 4)]
+    for index in range(4, 44):
+        temp = words[index - 1][:]
+        if index % 4 == 0:
+            temp = temp[1:] + temp[:1]
+            temp = [S[value] for value in temp]
+            temp[0] ^= RCON[index // 4 - 1]
+        words.append([words[index - 4][j] ^ temp[j] for j in range(4)])
+    return [sum((words[rnd * 4 + j] for j in range(4)), []) for rnd in range(11)]
+
+def _add_key(state, key):
+    for index, value in enumerate(key):
+        state[index] ^= value
+
+def _decrypt_block(block, keys):
+    state = list(block)
+    _add_key(state, keys[10])
+    for rnd in range(9, -1, -1):
+        previous = state[:]
+        for row in range(4):
+            for col in range(4):
+                state[col * 4 + row] = previous[((col - row) % 4) * 4 + row]
+        state[:] = [IS[value] for value in state]
+        _add_key(state, keys[rnd])
+        if rnd:
+            for col in range(4):
+                pos = col * 4
+                a = state[pos:pos + 4]
+                state[pos] = _mul(a[0], 14) ^ _mul(a[1], 11) ^ _mul(a[2], 13) ^ _mul(a[3], 9)
+                state[pos + 1] = _mul(a[0], 9) ^ _mul(a[1], 14) ^ _mul(a[2], 11) ^ _mul(a[3], 13)
+                state[pos + 2] = _mul(a[0], 13) ^ _mul(a[1], 9) ^ _mul(a[2], 14) ^ _mul(a[3], 11)
+                state[pos + 3] = _mul(a[0], 11) ^ _mul(a[1], 13) ^ _mul(a[2], 9) ^ _mul(a[3], 14)
+    return bytes(state)
+
+def aes128_ecb_decrypt(data, key):
+    if not data or len(data) % 16:
+        raise ViewTextError("AES 데이터 길이가 16바이트 배수가 아니다")
+    keys = _round_keys(bytes(key))
+    return b"".join(_decrypt_block(data[i:i + 16], keys) for i in range(0, len(data), 16))
+
+def decrypt_viewtext_section(data, compressed, max_output=256 * 1024 * 1024):
+    if len(data) < 4:
+        raise ViewTextError("ViewText 첫 레코드 헤더가 잘렸다")
+    header = struct.unpack_from("<I", data)[0]
+    tag = header & 0x3FF
+    size = (header >> 20) & 0xFFF
+    header_size = 4
+    if size == 0xFFF:
+        if len(data) < 8:
+            raise ViewTextError("ViewText 확장 레코드 헤더가 잘렸다")
+        size = struct.unpack_from("<I", data, 4)[0]
+        header_size = 8
+    end = header_size + size
+    if tag != TAG_DISTRIBUTE_DOC_DATA or size < 256 or end > len(data):
+        raise ViewTextError("DISTRIBUTE_DOC_DATA 레코드가 올바르지 않다")
+    payload = _unscramble(data[header_size:header_size + 256])
+    offset = 4 + (payload[0] & 15)
+    key = payload[offset:offset + 16]
+    encrypted = data[end:]
+    remainder = len(encrypted) % 16
+    if remainder:
+        if any(encrypted[-remainder:]):
+            raise ViewTextError("ViewText 암호 데이터 끝이 블록 경계에서 잘렸다")
+        encrypted = encrypted[:-remainder]
+    plain = aes128_ecb_decrypt(encrypted, key)
+    if not compressed:
+        if len(plain) > max_output:
+            raise ViewTextError("ViewText 본문이 처리 상한을 넘는다")
+        return plain.rstrip(b"\0")
+    decoder = zlib.decompressobj(-15)
+    try:
+        out = decoder.decompress(plain, max_output + 1)
+        out += decoder.flush(max_output + 1 - len(out))
+    except zlib.error as exc:
+        raise ViewTextError("ViewText DEFLATE가 손상됐다") from exc
+    if len(out) > max_output or not decoder.eof or decoder.unconsumed_tail:
+        raise ViewTextError("ViewText 압축 해제 결과가 비정상적이다")
+    return out
+
+"""0.5 읽기 계층 설치 진입점."""
+
+
+
+
+MAX_XML_DEPTH = 256
+MAX_XML_NODES = 2_000_000
+MAX_ZIP_RATIO = 1000
+MAX_ARCHIVE_TOTAL_SIZE = 1024 * 1024 * 1024
+
+
+def _parse_paragraph(module, records, start, end, docinfo, state):
+    base = records[start][1]; payloads = []; controls = []; blocks = []; pos = start + 1
+    while pos < end:
+        tag, level, data = records[pos]
+        if level == base + 1 and tag == module.HWPTAG_PARA_TEXT:
+            payloads.append(data); pos += 1; continue
+        if level == base + 1 and tag == module.HWPTAG_MEMO_LIST:
+            memo, nxt = module._parse_memo(records, pos)
+            if memo: blocks.append({"type": "memo", "text": memo})
+            pos = max(pos + 1, nxt); continue
+        if level == base + 1 and tag == module.HWPTAG_CTRL_HEADER:
+            effect = control_effect(module, records, pos, end, docinfo, state)
+            controls.append(effect); blocks.extend(effect["blocks"]); pos = max(pos + 1, effect["end"]); continue
+        pos += 1
+    text = decode_para(module, payloads, controls); prefix = paragraph_prefix(module, records[start], docinfo, state)
+    if prefix: text = (prefix + " " + text).strip()
+    out = [{"type": "text", "text": text}] if text else []; out.extend(blocks); return out
+
+
+def _parse_hwp_section(module, records, docinfo, state):
+    blocks = []; pos = 0
+    while pos < len(records):
+        tag, level, data = records[pos]
+        if tag == module.HWPTAG_PARA_HEADER:
+            end = pos + 1
+            while end < len(records):
+                ntag, nlevel, _ = records[end]
+                if ntag == module.HWPTAG_PARA_HEADER and nlevel <= level: break
+                end += 1
+            blocks.extend(_parse_paragraph(module, records, pos, end, docinfo, state)); pos = end; continue
+        if tag == module.HWPTAG_MEMO_LIST:
+            memo, nxt = module._parse_memo(records, pos)
+            if memo: blocks.append({"type": "memo", "text": memo})
+            pos = max(pos + 1, nxt); continue
+        if tag == module.HWPTAG_TABLE:
+            table, nxt = module._parse_table(records, pos)
+            if table.get("grid"): blocks.append({"type": "table", **table})
+            pos = max(pos + 1, nxt); continue
+        if tag == module.HWPTAG_PARA_TEXT:
+            text = module._decode_text(data).strip()
+            if text: blocks.append({"type": "text", "text": text})
+        pos += 1
+    return blocks
+
+
+def _read_hwp(module, source, name=None):
+    label = module._label(source, name)
+    try: ole = module.OleFile(source)
+    except ValueError as exc: raise ValueError(f"{label}: OLE HWP 파일이 아니다 ({exc})") from None
+    if not ole.exists("FileHeader"): raise ValueError(f"{label}: FileHeader 스트림이 없다")
+    head = ole.open("FileHeader")
+    if len(head) < 40 or not head.startswith(module.HWP_SIGNATURE): raise ValueError(f"{label}: HWP 5.0 FileHeader가 아니다")
+    flags = module.struct.unpack_from("<I", head, 36)[0]
+    compressed, encrypted, distribution, drm = bool(flags & 1), bool(flags & 2), bool(flags & 4), bool(flags & 16)
+    if drm: raise RuntimeError(f"{label}: DRM 보호 문서는 읽을 수 없다")
+    if encrypted: raise RuntimeError(f"{label}: 열기 암호가 걸린 문서다. 암호를 풀고 다시 저장할 것")
+    docinfo = _parse_docinfo(module, ole, compressed); prefix = "ViewText/Section" if distribution else "BodyText/Section"
+    names = sorted((s for s in ole.listdir() if s.startswith(prefix)), key=module._section_number)
+    if not names: raise ValueError(f"{label}: {'ViewText' if distribution else 'BodyText'} 섹션이 없다")
+    state = {"numbering": _NumberingState(), "auto": {}, "outline": 0, "seen": set()}; blocks = []; total = 0
+    for stream in names:
+        data = decrypt_viewtext_section(ole.open(stream), compressed, MAX_HWP_STREAM_BYTES) if distribution else module._read_stream(ole, stream, compressed)
+        total += len(data)
+        if len(data) > MAX_HWP_STREAM_BYTES or total > MAX_HWP_TOTAL_BYTES: raise ValueError(f"{label}: HWP 본문이 처리 상한을 넘는다")
+        blocks.extend(_parse_hwp_section(module, module._records(data), docinfo, state))
+    if not distribution: blocks.extend(module._read_hwp_changes(ole, compressed))
+    return blocks
+
+
+def _xml_guard(module, raw, section):
+    if len(raw) > MAX_HWPX_SECTION_BYTES: raise ValueError(f"{section}: HWPX XML이 처리 상한을 넘는다")
+    head = raw[:65536].upper()
+    if b"<!DOCTYPE" in head or b"<!ENTITY" in head: raise ValueError(f"{section}: DTD/ENTITY가 있는 XML은 거부한다")
+    try: root = module.ElementTree.fromstring(raw)
+    except module.ElementTree.ParseError as exc: raise ValueError(f"손상된 HWPX XML ({section})") from exc
+    stack = [(root, 1)]; nodes = 0
+    while stack:
+        node, depth = stack.pop(); nodes += 1
+        if nodes > MAX_XML_NODES: raise ValueError(f"{section}: XML 노드가 처리 상한을 넘는다")
+        if depth > MAX_XML_DEPTH: raise ValueError(f"{section}: XML 깊이가 처리 상한을 넘는다")
+        stack.extend((child, depth + 1) for child in node)
+    return root
+
+
+def _hwpx_ref(module, node):
+    for item in node.iter():
+        for key in ("binaryItemIDRef", "href"):
+            value = item.get(key)
+            if value: return value
+    return ""
+
+
+def _hwpx_para(module, para, blocks):
+    buf = []; extras = []; deleted = [0]
+    def flush():
+        text = module.re.sub(r"[ \t]+", " ", "".join(buf)).strip(); buf.clear()
+        if text: blocks.append({"type": "text", "text": text})
+    def walk(node, depth=0):
+        if depth > MAX_XML_DEPTH: raise ValueError("HWPX 문단 중첩 깊이가 처리 상한을 넘는다")
+        for child in node:
+            local = module._hwpx_local(child.tag)
+            if local == "deleteBegin": deleted[0] += 1; continue
+            if local == "deleteEnd": deleted[0] = max(0, deleted[0] - 1); continue
+            if local in ("insertBegin", "insertEnd", "hiddenComment", "shapeComment"): continue
+            if local == "tbl":
+                flush(); table = module._hwpx_table(child)
+                if table.get("grid"): blocks.append({"type": "table", **table})
+                continue
+            if local in ("memo", "memogroup"): flush(); module._hwpx_append_memos(child, blocks); continue
+            if local in ("footNote", "endNote", "fn", "en"):
+                text = module._hwpx_text_of(child).strip()
+                if text: extras.append({"type": "note", "kind": "각주" if local in ("footNote", "fn") else "미주", "text": text})
+                continue
+            if local == "equation":
+                script = next((n for n in child.iter() if module._hwpx_local(n.tag) == "script"), None); text = module._hwpx_text_of(script) if script is not None else ""
+                if text: buf.append(f" [수식: {text}] ")
+                continue
+            if local == "hyperlink":
+                url = child.get("url") or child.get("href") or ""
+                if url and len(url) <= MAX_HYPERLINK_LENGTH: extras.append({"type": "hyperlink", "url": url})
+                walk(child, depth + 1); continue
+            if local == "fieldBegin":
+                for item in child.iter():
+                    if module._hwpx_local(item.tag) == "stringParam" and item.get("name") == "Path":
+                        url = (item.text or "").strip()
+                        if url and len(url) <= MAX_HYPERLINK_LENGTH: extras.append({"type": "hyperlink", "url": url})
+                        break
+                continue
+            if local in ("pic", "shape", "drawingObject"):
+                ref = _hwpx_ref(module, child)
+                if ref: extras.append({"type": "image", "name": ref})
+                draw = next((n for n in child.iter() if module._hwpx_local(n.tag) == "drawText"), None)
+                text = module._hwpx_text_of(draw) if draw is not None else ""
+                if text: extras.append({"type": "textbox", "text": text})
+                continue
+            if local == "t" and child.text and not deleted[0]: buf.append(child.text); walk(child, depth + 1); continue
+            if local == "tab" and not deleted[0]: buf.append("\t"); continue
+            if local in ("br", "lineBreak") and not deleted[0]: buf.append("\n"); continue
+            if local in ("fwSpace", "hwSpace") and not deleted[0]: buf.append(" "); continue
+            walk(child, depth + 1)
+    walk(para); flush(); blocks.extend(extras)
+
+
+def _hwpx_walk(module, node, blocks):
+    for child in node:
+        local = module._hwpx_local(child.tag)
+        if local == "tbl":
+            table = module._hwpx_table(child)
+            if table.get("grid"): blocks.append({"type": "table", **table})
+        elif local in ("memo", "memogroup"): module._hwpx_append_memos(child, blocks)
+        elif local == "p": _hwpx_para(module, child, blocks)
+        else: _hwpx_walk(module, child, blocks)
+
+
+def _zip_guard(zf, label):
+    infos = zf.infolist(); seen = set(); total = 0
+    for info in infos:
+        if info.filename in seen: raise ValueError(f"{label}: ZIP 경로가 중복됐다: {info.filename}")
+        seen.add(info.filename); total += info.file_size
+        if total > MAX_ARCHIVE_TOTAL_SIZE: raise ValueError(f"{label}: ZIP 전체 압축 해제 크기가 처리 상한을 넘는다")
+        if info.compress_size and info.file_size > 1024 * 1024 and info.file_size / info.compress_size > MAX_ZIP_RATIO: raise ValueError(f"{label}: 비정상 압축률의 ZIP 멤버다: {info.filename}")
+    return infos
+
+
+def _read_hwpx(module, source, name=None):
+    label = module._label(source, name)
+    if not module._is_zip(source): raise ValueError(f"{label}: HWPX가 아니다(ZIP 컨테이너가 아님)")
+    blocks = []
+    with module.zipfile.ZipFile(module._zip_handle(source)) as zf:
+        infos = _zip_guard(zf, label)
+        sections = sorted((i for i in infos if module.re.match(r"Contents/section\d+\.[Xx][Mm][Ll]$", i.filename)), key=lambda i: module._section_number(i.filename))
+        if not sections: raise ValueError(f"{label}: Contents/sectionN.xml을 찾지 못했다")
+        total = 0
+        for info in sections:
+            total += info.file_size
+            if info.file_size > MAX_HWPX_SECTION_BYTES or total > MAX_HWPX_TOTAL_XML_BYTES: raise ValueError(f"{label}: HWPX XML이 처리 상한을 넘는다")
+            _hwpx_walk(module, _xml_guard(module, zf.read(info), info.filename), blocks)
+    return blocks
+
+
+def _read_documents(module, source):
+    label = module._label(source)
+    if not module._is_zip(source) or module._is_hwpx(source): return [{"file": module.os.path.basename(label), "blocks": module.read(source)}]
+    documents = []
+    with module.zipfile.ZipFile(module._zip_handle(source)) as zf:
+        infos = _zip_guard(zf, label); members = [i for i in infos if not i.is_dir() and not i.filename.startswith("__MACOSX/") and i.filename.lower().endswith(module.ARCHIVE_EXTS)]
+        if not members: raise ValueError(f"{label}: ZIP 안에 HWP/HWPX가 없다")
+        if len(members) > module.MAX_ARCHIVE_DOCUMENTS: raise ValueError(f"{label}: ZIP 안 문서가 {module.MAX_ARCHIVE_DOCUMENTS}개를 넘는다")
+        for info in members:
+            if info.file_size > module.MAX_ARCHIVE_MEMBER_SIZE: documents.append({"file": info.filename, "error": "ZIP 멤버가 처리 상한을 넘는다"}); continue
+            try: documents.append({"file": info.filename, "blocks": module.read(zf.read(info), name=info.filename)})
+            except Exception as exc: documents.append({"file": info.filename, "error": str(exc)})
+    return documents
+
+
+def _render(module, blocks, fmt="text", tables_only=False):
+    lines = []
+    for block in blocks:
+        kind = block.get("type")
+        if kind == "memo": lines.append("[메모] " + block["text"])
+        elif kind == "revision": lines.append(f"[변경추적 {'추가' if block['kind'] == 'insert' else '삭제'}] {block['text']}")
+        elif kind == "note": lines.append(f"[{block.get('kind','주석')}{' ' + str(block['number']) if block.get('number') is not None else ''}] {block.get('text','')}".rstrip())
+        elif kind == "hyperlink": lines.append(f"[하이퍼링크] {block.get('url','')}")
+        elif kind == "image": lines.append(f"[이미지 · {block.get('name','참조')}]")
+        elif kind == "textbox": lines.append(f"[글상자] {block.get('text','')}")
+        elif kind == "header": lines.append(f"[머리말] {block.get('text','')}")
+        elif kind == "footer": lines.append(f"[꼬리말] {block.get('text','')}")
+        elif kind == "text" and not tables_only: lines.append(block["text"])
+        elif kind == "table": module._render_table(block, fmt, lines)
+    return "\n".join(lines)
+
+
+def _render_documents(module, documents, fmt="md"):
+    chunks = []
+    for doc in documents:
+        chunks.append(f"\n{'=' * 70}\n{doc['file']}\n{'=' * 70}\n")
+        chunks.append("[실패] " + doc["error"] if doc.get("error") else module.render(doc.get("blocks", []), fmt))
+    return "\n".join(chunks).strip()
+
+
+def install(module):
+    module._records = lambda data: _records_limited(module, data)
+    module.read_hwp = lambda source, name=None: _read_hwp(module, source, name)
+    module.read_hwpx = lambda source, name=None: _read_hwpx(module, source, name)
+    module.read_documents = lambda source: _read_documents(module, source)
+    module.render = lambda blocks, fmt="text", tables_only=False: _render(module, blocks, fmt, tables_only)
+    module.render_documents = lambda documents, fmt="md": _render_documents(module, documents, fmt)
+    return module
+
+"""0.5 의미 복원 계층을 코어에 연결한다."""
+import posixpath
+import sys
+
+
+
+
+
+sys.modules[__name__].OleFile = FallbackOleFile
+install(sys.modules[__name__])
+
+# _reader_v05의 함수들은 자기 모듈 전역을 런타임에 조회한다. 패키지와 단일 파일
+# 모두 같은 방식으로 보강하기 위해 install 함수가 속한 실제 모듈을 잡는다.
+_reader_runtime = sys.modules[install.__module__]
+_original_xml_guard = _reader_runtime._xml_guard
+_original_zip_guard = _reader_runtime._zip_guard
+_MAX_ZIP_MEMBERS = 10_000
+
+
+def _bounded_read_stream(ole, name, compressed):
+    """정상 HWP fast path를 유지하면서 DEFLATE 출력 크기를 먼저 제한한다."""
+    raw = ole.open(name)
+    limit = _reader_runtime.MAX_HWP_STREAM_BYTES
+    if len(raw) > limit:
+        raise ValueError(f"{name}: HWP 스트림이 처리 상한을 넘는다")
+    if not compressed:
+        return raw
+
+    decoder = sys.modules[__name__].zlib.decompressobj(-15)
+    try:
+        out = decoder.decompress(raw, limit + 1)
+        if len(out) > limit or decoder.unconsumed_tail:
+            raise ValueError(f"{name}: 압축 해제 결과가 처리 상한을 넘는다")
+        out += decoder.flush(limit + 1 - len(out))
+    except sys.modules[__name__].zlib.error as exc:
+        raise ValueError(f"{name}: HWP 압축 스트림이 손상됐다") from exc
+    if len(out) > limit or not decoder.eof or decoder.unconsumed_tail:
+        raise ValueError(f"{name}: HWP 압축 스트림이 비정상적이거나 처리 상한을 넘는다")
+    return out
+
+
+def _guarded_xml(module, raw, section):
+    # XML 선언부 앞에 긴 공백/주석을 둬 64 KiB 선두 검사만 우회하는 입력도 막는다.
+    if b"<!DOCTYPE" in raw or b"<!ENTITY" in raw:
+        raise ValueError(f"{section}: DTD/ENTITY가 있는 XML은 거부한다")
+    return _original_xml_guard(module, raw, section)
+
+
+def _guarded_zip(zf, label):
+    infos = zf.infolist()
+    if len(infos) > _MAX_ZIP_MEMBERS:
+        raise ValueError(f"{label}: ZIP 멤버가 {_MAX_ZIP_MEMBERS}개 처리 상한을 넘는다")
+
+    normalized = set()
+    for info in infos:
+        name = info.filename.replace("\\", "/")
+        norm = posixpath.normpath(name)
+        if norm.startswith("../") or norm == ".." or norm.startswith("/"):
+            raise ValueError(f"{label}: 비정상 ZIP 경로다: {info.filename}")
+        key = norm.casefold()
+        if key in normalized:
+            raise ValueError(f"{label}: 정규화한 ZIP 경로가 중복됐다: {info.filename}")
+        normalized.add(key)
+    return _original_zip_guard(zf, label)
+
+
+
+# parser.py에서 hardening을 먼저 설치하므로 이 최종 bounded reader가 유지된다.
+sys.modules[__name__]._read_stream = _bounded_read_stream
+_reader_runtime._xml_guard = _guarded_xml
+_reader_runtime._zip_guard = _guarded_zip
+
+_single_base_read_hwp = sys.modules[__name__].read_hwp
+_single_base_read_hwpx = sys.modules[__name__].read_hwpx
+_single_base_render = sys.modules[__name__].render
+
+
+def _single_validate_table(table, what="표"):
+    rows = table.get("rows", 0)
+    cols = table.get("cols", 0)
+    if rows and cols:
+        occupied = bytearray(rows * cols)
+        for cell in table.get("cells", []):
+            row = cell.get("row", 0)
+            col = cell.get("col", 0)
+            rowspan = cell.get("rowspan", 1)
+            colspan = cell.get("colspan", 1)
+            for r in range(row, row + rowspan):
+                start = r * cols + col
+                end = start + colspan
+                if any(occupied[start:end]):
+                    raise ValueError(
+                        f"손상된 {what}: 병합 셀 범위가 서로 겹친다 "
+                        f"(row={row}, col={col}, rowspan={rowspan}, colspan={colspan})"
+                    )
+                occupied[start:end] = b"\x01" * colspan
+    for nested in table.get("nested_tables", []):
+        child = nested.get("table")
+        if child:
+            _single_validate_table(child, what + " 안의 표")
+
+
+def _single_validate_blocks(blocks):
+    for block in blocks:
+        if block.get("type") == "table":
+            _single_validate_table(block)
+
+
+def _single_post_read_hwp(source, name=None):
+    blocks = _single_base_read_hwp(source, name=name)
+    _single_validate_blocks(blocks)
+    notes = current_compat_warnings()
+    if notes:
+        blocks.insert(0, {"type": "warning", "text": "비표준 CFB 호환 모드: " + "; ".join(notes)})
+    return blocks
+
+
+def _single_post_read_hwpx(source, name=None):
+    blocks = _single_base_read_hwpx(source, name=name)
+    _single_validate_blocks(blocks)
+    return blocks
+
+
+def _single_post_render(blocks, fmt="text", tables_only=False):
+    visible = [
+        {"type": "text", "text": "[경고] " + block.get("text", "")}
+        if block.get("type") == "warning" else block
+        for block in blocks
+    ]
+    return _single_base_render(visible, fmt, tables_only)
+
+
+sys.modules[__name__].read_hwp = _single_post_read_hwp
+sys.modules[__name__].read_hwpx = _single_post_read_hwpx
+sys.modules[__name__].render = _single_post_render
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("사용법: python hwp_reader_single.py 문서.hwp|문서.hwpx|묶음.zip [...]", file=sys.stderr)
         sys.exit(2)
     failed = False
     for index, path in enumerate(sys.argv[1:]):
-        if index:
-            print()
+        if index: print()
         try:
             print(render_documents(read_documents(path), "md"))
         except Exception as exc:

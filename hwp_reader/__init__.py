@@ -3,6 +3,6 @@
 from .parser import (read, read_documents, read_hwp, read_hwpx, render,
                      render_documents)
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = ["read", "read_documents", "read_hwp", "read_hwpx", "render",
            "render_documents"]

@@ -23,9 +23,11 @@ def 예산서(tmp_path):
     return write_hwpx(tmp_path / "예산서.hwpx")
 
 
-def test_도구가_셋_등록된다():
+def test_도구가_넷_등록된다():
     tools = asyncio.run(mcp_server.mcp.list_tools())
-    assert {t.name for t in tools} == {"hwp_read", "hwp_tables", "hwp_memos"}
+    assert {t.name for t in tools} == {
+        "hwp_read", "hwp_tables", "hwp_memos", "hwp_revisions"
+    }
 
 
 def test_hwp_read가_표를_살려_돌려준다(예산서):

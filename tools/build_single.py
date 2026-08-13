@@ -105,9 +105,7 @@ def source_fingerprint():
         raise RuntimeError("_parser_core.py에서 _ole import를 하나 찾지 못했다")
     core = core.replace(import_line, "").rstrip()
     hardening = HARDEN_SOURCE.read_text(encoding="utf-8").rstrip()
-    return hashlib.sha256(
-        (ole + "\n\n" + core + "\n\n" + hardening).encode("utf-8")
-    ).hexdigest()[:16]
+    return hashlib.sha256((ole + "\n\n" + core + "\n\n" + hardening).encode("utf-8")).hexdigest()[:16]
 
 
 def build_source():
@@ -119,40 +117,25 @@ def build_source():
     core = core.replace(import_line, "").rstrip()
     hardening = HARDEN_SOURCE.read_text(encoding="utf-8").rstrip()
     digest = source_fingerprint()
-    header = (
-        f"# AI HWP Reader v{_version()} | source-sha256:{digest} | "
-        "표준 라이브러리 only | MIT | "
-        "https://github.com/renovys/ai-hwp-reader"
-    )
-
-    main = (
-        'if __name__ == "__main__":\n'
-        "    if len(sys.argv) < 2:\n"
-        '        print("사용법: python hwp_reader_single.py '
-        '문서.hwp|문서.hwpx|묶음.zip [...]", file=sys.stderr)\n'
-        "        sys.exit(2)\n"
-        "    failed = False\n"
-        "    for index, path in enumerate(sys.argv[1:]):\n"
-        "        if index:\n"
-        "            print()\n"
-        "        try:\n"
-        '            print(render_documents(read_documents(path), "md"))\n'
-        "        except Exception as exc:\n"
-        "            failed = True\n"
-        '            print(f"[실패] {path}: {exc}", file=sys.stderr)\n'
-        "    sys.exit(1 if failed else 0)"
-    )
+    header = f"# AI HWP Reader v{_version()} | source-sha256:{digest} | 표준 라이브러리 only | MIT | https://github.com/renovys/ai-hwp-reader"
+    main = ('if __name__ == "__main__":\n'
+            "    if len(sys.argv) < 2:\n"
+            '        print("사용법: python hwp_reader_single.py 문서.hwp|문서.hwpx|묶음.zip [...]", file=sys.stderr)\n'
+            "        sys.exit(2)\n"
+            "    failed = False\n"
+            "    for index, path in enumerate(sys.argv[1:]):\n"
+            "        if index: print()\n"
+            "        try:\n"
+            '            print(render_documents(read_documents(path), "md"))\n'
+            "        except Exception as exc:\n"
+            "            failed = True\n"
+            '            print(f"[실패] {path}: {exc}", file=sys.stderr)\n'
+            "    sys.exit(1 if failed else 0)")
     return "\n\n".join((header, ole, core, hardening, "install(sys.modules[__name__])", main))
 
 
 def build_skill(single):
-    return (
-        SKILL_PREFIX.rstrip()
-        + "\n\n```python\n"
-        + single
-        + "\n```\n"
-        + SKILL_SUFFIX
-    )
+    return SKILL_PREFIX.rstrip() + "\n\n```python\n" + single + "\n```\n" + SKILL_SUFFIX
 
 
 def main():
@@ -160,10 +143,10 @@ def main():
     SINGLE_SOURCE.parent.mkdir(parents=True, exist_ok=True)
     SINGLE_SOURCE.write_text(single, encoding="utf-8")
     SKILL_SOURCE.write_text(build_skill(single), encoding="utf-8")
-    # CI/Windows 콘솔의 cp1252에서도 빌드 자체가 성공해야 한다.
     print(f"generated: {SINGLE_SOURCE.relative_to(ROOT)}")
     print("generated: SKILL.md")
 
 
 if __name__ == "__main__":
-    main()
+    from bundle_v05 import main as _main_v05
+    _main_v05()

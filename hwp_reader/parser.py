@@ -3,7 +3,11 @@
 from . import _parser_core as _core
 from ._parser_hardening import install as _install
 
+# 0.4 정확성 보강을 먼저 설치한 뒤 0.5 계층을 연결한다.
+# 단일 파일 생성물과 같은 순서로 맞춰 0.5의 최종 읽기 경로를 보존한다.
 _install(_core)
+
+from . import _v05_enable as _v05_enable
 
 ARCHIVE_EXTS = _core.ARCHIVE_EXTS
 CELL_OFFSET = _core.CELL_OFFSET
@@ -57,4 +61,4 @@ render_documents = _core.render_documents
 _validate_cells = _core._validate_cells
 _decode_utf16 = _core._decode_utf16
 
-del _install
+del _install, _v05_enable

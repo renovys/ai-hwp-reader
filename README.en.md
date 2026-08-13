@@ -15,13 +15,19 @@ No Hancom Office · zero runtime dependencies for the core parser · read-only
 
 > HWP · HWPX · Hangul · Hancom · Arae-A Hangul → AI
 
-## The easiest way: download one file, attach it, say “do it”
+## Install it once, then just attach documents
 
 You do **not** need a terminal, Python knowledge, or `pip install`.
 
-1. **[Download `SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md)** — one click, saves straight to your machine. To install it once and keep it, grab [`ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip) and upload it as a skill instead.
-2. Attach `SKILL.md` together with your `.hwp`, `.hwpx`, or `.zip` file to the AI chat.
-3. Say **“do it”** — or ask for the actual work you want done.
+1. **[Download `ai-hwp-reader-skill.zip`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/ai-hwp-reader-skill.zip)** — one click, saves straight to your machine.
+2. Register it once with your AI:
+   - **Claude** — Settings → Skills → create a skill and upload the zip as is.
+   - **ChatGPT** — add `SKILL.md` and `scripts/hwp_reader_single.py` from the zip as files in a Project or a custom GPT.
+3. From then on, just attach a `.hwp`, `.hwpx`, or `.zip` and ask for the work you want done.
+
+Prefer not to install anything? Download [`SKILL.md`](https://github.com/renovys/ai-hwp-reader/releases/latest/download/SKILL.md) and attach it alongside your document each time.
+
+Some models, Gemini among them, already read Hangul documents directly. Where this parser pulls ahead is complex tables — merged cells and two- or three-row headers, whose cell coordinates it restores instead of flattening.
 
 `SKILL.md` contains the complete zero-dependency parser plus execution instructions. In an AI environment that can execute Python, the model runs the parser against the attached file and then uses the parsed result to continue the task.
 

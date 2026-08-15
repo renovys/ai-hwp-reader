@@ -1,0 +1,18 @@
+{
+  "name": "ai-hwp-reader",
+  "description": "한글 문서(.hwp·.hwpx)나 그 문서가 든 .zip을 한컴 없이 읽는다. 본문·표(병합 셀, 다단 헤더, 표 안의 표)·숨은 메모·변경추적을 보존해 마크다운으로 뽑는다. 의존성 0, 읽기 전용.",
+  "version": "0.5.2",
+  "author": {
+    "name": "renovys",
+    "url": "https://github.com/renovys"
+  },
+  "homepage": "https://github.com/renovys/ai-hwp-reader",
+  "license": "MIT",
+  "keywords": [
+    "hwp",
+    "hwpx",
+    "korean",
+    "document",
+    "parser"
+  ]
+}

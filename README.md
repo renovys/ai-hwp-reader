@@ -47,6 +47,21 @@ ChatGPT의 스킬은 Agent Skills 개방형 표준을 따르므로 이 패키지
 
 **Gemini** — 스킬에 해당하는 기능이 없으므로 1번처럼 `SKILL.md`를 문서와 함께 올립니다.
 
+### 3. 플러그인으로 설치하기 (Claude Code · Claude 데스크톱 앱)
+
+이 저장소 자체가 플러그인 마켓플레이스입니다. zip을 받을 필요 없이 주소만 등록하면 됩니다.
+
+```bash
+claude plugin marketplace add renovys/ai-hwp-reader
+claude plugin install ai-hwp-reader@ai-hwp-reader
+```
+
+데스크톱 앱에서는 플러그인 화면에서 **Add marketplace from GitHub**을 고르고
+`https://github.com/renovys/ai-hwp-reader` 를 넣으면 같은 것이 설치됩니다.
+앱 쪽 플러그인은 계정에 남으므로 기기마다 다시 설치하지 않아도 됩니다.
+
+업데이트는 `claude plugin marketplace update ai-hwp-reader` 한 줄입니다.
+
 자세한 안내: [ChatGPT의 스킬](https://help.openai.com/ko-kr/articles/20001066-skills-in-chatgpt) ·
 [Claude 커스텀 스킬 만들기](https://support.claude.com/en/articles/12512198-how-to-create-custom-skills)
 

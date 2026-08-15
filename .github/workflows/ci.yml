@@ -40,6 +40,12 @@ jobs:
         run: python -m pip install -e ".[mcp]"
       - name: 시험
         run: python -m pytest tests -q
+      - name: 플러그인 트리가 정본과 맞는지
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: |
+          python tools/build_skill_package.py
+          git diff --exit-code -- skills .claude-plugin/plugin.json
+
       - name: 컴파일 확인
         run: python -m compileall -q hwp_reader skill/hwp_reader_single.py
       - name: 명령이 실제로 실행되는지

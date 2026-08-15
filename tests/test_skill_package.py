@@ -71,3 +71,37 @@ def test_비UTF8_환경에서도_한글_출력이_죽지_않는다(tmp_path):
     )
     assert p.returncode == 0, p.stderr.decode("utf-8", "replace")
     assert "[메모]" in p.stdout.decode("utf-8", "replace")
+
+
+def test_플러그인_트리와_매니페스트가_규격대로다():
+    """`skills/`는 커밋되는 생성물이고 플러그인이 실제로 로드하는 경로다.
+
+    여기서는 구성·형식만 본다. **커밋 누락**(정본을 고치고 빌드를 안 돌린 채 커밋)은
+    이 검사로 잡히지 않는다 — 같은 pytest 세션의 다른 시험이 빌드를 돌려 트리를 복구해
+    버리기 때문이다. 그 게이트는 CI의 `git diff --exit-code -- skills` 단계가 맡는다.
+    """
+    import json
+
+    ver = re.search(
+        r'__version__\s*=\s*"([^"]+)"',
+        (ROOT / "hwp_reader" / "__init__.py").read_text(encoding="utf-8"),
+    ).group(1)
+    expected = {
+        "SKILL.md": (ROOT / "skill" / "agent" / "SKILL.md").read_text(encoding="utf-8").replace("__VERSION__", ver),
+        "scripts/hwp_reader_single.py": (ROOT / "skill" / "hwp_reader_single.py").read_text(encoding="utf-8"),
+        "LICENSE": (ROOT / "LICENSE").read_text(encoding="utf-8"),
+    }
+
+    tree = ROOT / "skills" / "ai-hwp-reader"
+    for rel, body in expected.items():
+        got = tree / rel
+        assert got.is_file(), f"플러그인 트리에 없는 파일: {got}"
+        assert got.read_text(encoding="utf-8") == body, (
+            f"정본과 어긋난다: {got} — tools/build_skill_package.py 를 다시 돌려라"
+        )
+
+    meta = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    assert meta["name"] == "ai-hwp-reader"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", meta["version"])
+    assert [p["name"] for p in market["plugins"]] == ["ai-hwp-reader"]

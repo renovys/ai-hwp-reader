@@ -108,7 +108,8 @@ def main():
     for k, v in members.items():
         dest = PLUGIN_TREE / k[len(NAME) + 1:]
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(v, encoding="utf-8", newline="\n")
+        with dest.open("w", encoding="utf-8", newline="\n") as output:
+            output.write(v)
     print(f"generated: {PLUGIN_TREE.relative_to(ROOT)}/ ({len(members)}개 파일)")
 
     if not PLUGIN_JSON.is_file():
